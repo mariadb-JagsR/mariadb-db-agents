@@ -1,0 +1,8 @@
+# MariaDB Slow Query Tuning Agent Dependencies
+# OpenAI Agents SDK - the new SDK for building agents
+openai-agents>=0.6.0
+# Database connector
+mysql-connector-python>=9.0.0
+# Environment variable management
+python-dotenv>=1.0.1
+

@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment variables
+.env
+.env.local
+
+# Logs
+*.log
+
+# Conversation databases
+*.db
+*.sqlite
+*.sqlite3
+.slow_query_agent_conversations.db
+
+# Observability logs
+.observability_log.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+

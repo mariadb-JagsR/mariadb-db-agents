@@ -1,0 +1,19 @@
+#!/usr/bin/env python3
+"""
+Wrapper script to run mariadb_db_agents from any directory.
+This script ensures the parent directory is on the Python path.
+"""
+
+import sys
+from pathlib import Path
+
+# Add parent directory to Python path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
+# Import and run the CLI
+from mariadb_db_agents.cli.main import main
+
+if __name__ == "__main__":
+    sys.exit(main())
+
