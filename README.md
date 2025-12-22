@@ -74,22 +74,39 @@ mariadb_db_agents/
 └── README.md
 ```
 
-## Setup
+## Installation
 
-### 1. Activate Virtual Environment
-
-The parent directory (`python_programs`) has a virtual environment with all required dependencies. Activate it:
+### Option 1: Install from Git Repository
 
 ```bash
-cd /Users/jagsramnarayan-mariadb/Documents/skysql/develop/python_programs
+# Clone the repository
+git clone https://github.com/mariadb-JagsR/mariadb-db-agents.git
+cd mariadb-db-agents
+
+# Create and activate virtual environment
+python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install in development mode
+pip install -e .
+
+# Or install dependencies directly
+pip install -r requirements.txt
 ```
 
-### 2. Install Dependencies
+### Option 2: Use Existing Virtual Environment
+
+If you have an existing virtual environment with dependencies:
 
 ```bash
+# Activate your virtual environment
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install dependencies
 pip install -r mariadb_db_agents/requirements.txt
 ```
+
+### Dependencies
 
 This will install:
 - `openai-agents` - The OpenAI Agents SDK
@@ -294,9 +311,11 @@ Metrics are automatically logged to `.observability_log.json` and displayed in i
 
 ## License
 
-[Add your license here]
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Support
 
-[Add support information here]
+- **Issues**: Report bugs or request features on [GitHub Issues](https://github.com/mariadb-JagsR/mariadb-db-agents/issues)
+- **Documentation**: See `docs/` directory for detailed documentation
+- **Contributing**: See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines
 
