@@ -30,6 +30,8 @@ dependencies = [
     "openai-agents>=0.6.0",
     "mysql-connector-python>=9.0.0",
     "python-dotenv>=1.0.1",
+    "requests>=2.31.0",
+    "python-dateutil>=2.8.0",
 ]
 
 [project.optional-dependencies]
@@ -45,8 +47,7 @@ mariadb-db-agents = "mariadb_db_agents.cli.main:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["mariadb_db_agents*"]
-exclude = ["tests*", "scripts*"]
+namespaces = false
 
 [tool.black]
 line-length = 100

@@ -55,3 +55,32 @@ class DBConfig:
             database=database,
         )
 
+
+@dataclass
+class SkySQLConfig:
+    """Configuration for SkySQL API access using API key."""
+    api_key: str
+    api_url: str
+    service_id: str | None = None
+
+    @classmethod
+    def from_env(cls) -> "SkySQLConfig":
+        api_key = os.getenv("SKYSQL_API_KEY")
+        api_url = os.getenv(
+            "SKYSQL_LOG_API_URL",
+            "https://api.skysql.com/observability/v2/logs"
+        )
+        service_id = os.getenv("SKYSQL_SERVICE_ID")
+
+        if not api_key:
+            raise RuntimeError(
+                "SkySQL API key not set. Set SKYSQL_API_KEY in environment or .env file. "
+                "You can generate an API key at https://id.mariadb.com/account/api/"
+            )
+
+        return cls(
+            api_key=api_key,
+            api_url=api_url,
+            service_id=service_id,
+        )
+
