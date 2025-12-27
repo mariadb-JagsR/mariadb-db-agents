@@ -8,7 +8,9 @@ This project is a comprehensive platform for MariaDB database management with sp
 
 1. **Slow Query Agent**: Analyzes historical slow queries from slow query logs
 2. **Running Query Agent**: Analyzes currently executing SQL queries in real-time
-3. **More agents coming soon**: Replication health, connection pool management, capacity planning, and more
+3. **Incident Triage Agent**: Quick health check that identifies database issues and provides actionable checklists
+4. **DBA Orchestrator**: Meta-agent that intelligently routes queries to specialized agents and synthesizes comprehensive reports
+5. **More agents coming soon**: Replication health, connection pool management, capacity planning, and more
 
 All agents use the **OpenAI Agents SDK** to intelligently query the database and provide actionable recommendations.
 
@@ -25,6 +27,9 @@ All agents use the **OpenAI Agents SDK** to intelligently query the database and
 - **Query Categorization**: Identifies CPU-bound, I/O-bound, and lock-bound queries for targeted optimization
 - **Unified CLI**: Single command-line interface for all agents
 - **Interactive Mode**: Conversation-based interaction with agents
+- **DBA Orchestrator**: Intelligent routing to specialized agents based on user queries
+- **SkySQL Integration**: Error log access via SkySQL API
+- **Error Log Analysis**: Pattern extraction and analysis from database error logs
 
 ## Project Structure
 
@@ -43,6 +48,11 @@ mariadb_db_agents/
 │   │   ├── main.py
 │   │   └── conversation.py
 │   │
+│   ├── incident_triage/         # Incident triage agent
+│   │   ├── agent.py
+│   │   ├── tools.py
+│   │   └── main.py
+│   │
 │   └── ...                      # Future agents
 │
 ├── common/                      # Shared infrastructure
@@ -56,7 +66,14 @@ mariadb_db_agents/
 ├── cli/                         # Unified CLI interface
 │   └── main.py                  # Main entry point
 │
-├── orchestrator/                # Future: DBA orchestrator agent
+├── orchestrator/                # DBA orchestrator agent
+│   ├── agent.py                 # Orchestrator agent definition
+│   ├── tools.py                 # Tools for invoking other agents
+│   ├── main.py                  # CLI entry point
+│   ├── conversation.py          # Interactive conversation mode
+│   ├── README.md                # Orchestrator usage guide
+│   ├── ORCHESTRATOR_PLAN.md     # Implementation plan
+│   └── ADVANCED_WORKFLOWS.md    # Advanced multi-agent workflows
 │
 ├── scripts/                     # Utility scripts
 │   ├── generate_slow_queries.py
@@ -112,6 +129,8 @@ This will install:
 - `openai-agents` - The OpenAI Agents SDK
 - `mysql-connector-python` - MariaDB/MySQL connector
 - `python-dotenv` - Environment variable management
+- `requests` - HTTP requests for SkySQL API integration
+- `python-dateutil` - Date parsing for log analysis
 
 ### 3. Configure Environment
 
@@ -124,12 +143,15 @@ cp .env.example .env
 
 Edit `.env` with your actual values:
 - `OPENAI_API_KEY`: Your OpenAI API key
-- `OPENAI_MODEL`: Model to use (default: `gpt-4o-mini`)
+- `OPENAI_MODEL`: Model to use (default: `gpt-5.2`)
 - `DB_HOST`: MariaDB host address
 - `DB_PORT`: MariaDB port (default: 3306)
 - `DB_USER`: Read-only database user
 - `DB_PASSWORD`: Database password
 - `DB_DATABASE`: Database name
+- `SKYSQL_API_KEY`: (Optional) SkySQL API key for error log access
+- `SKYSQL_SERVICE_ID`: (Optional) SkySQL service ID for error log access
+- `SKYSQL_LOG_API_URL`: (Optional) SkySQL log API URL (defaults to public API)
 
 **Note**: Database connections are configured via environment variables (DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_DATABASE).
 
@@ -146,9 +168,18 @@ python -m mariadb_db_agents.cli.main slow-query --hours 1 --max-patterns 5
 # Analyze running queries
 python -m mariadb_db_agents.cli.main running-query --min-time-seconds 5.0
 
+# Perform incident triage
+python -m mariadb_db_agents.cli.main incident-triage
+
+# Use orchestrator (intelligent routing to specialized agents)
+python -m mariadb_db_agents.cli.main orchestrator "Is my database healthy?"
+python -m mariadb_db_agents.cli.main orchestrator "Analyze slow queries from the last hour"
+python -m mariadb_db_agents.cli.main orchestrator --interactive
+
 # Interactive conversation mode
 python -m mariadb_db_agents.cli.main slow-query --interactive
 python -m mariadb_db_agents.cli.main running-query --interactive
+python -m mariadb_db_agents.cli.main orchestrator --interactive
 ```
 
 ### Individual Agent Entry Points
@@ -188,9 +219,57 @@ python -m mariadb_db_agents.agents.running_query.conversation
 
 **Note**: Database connection is configured via environment variables (DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_DATABASE).
 
+#### Incident Triage Agent
+
+```bash
+# CLI mode
+python -m mariadb_db_agents.cli.main incident-triage
+
+# With error log path (local file)
+python -m mariadb_db_agents.cli.main incident-triage --error-log-path /var/log/mysql/error.log
+
+# With SkySQL service ID (API access)
+python -m mariadb_db_agents.cli.main incident-triage --service-id YOUR_SERVICE_ID
+```
+
+**Arguments:**
+- `--error-log-path` (optional): Path to error log file for local file access
+- `--service-id` (optional): SkySQL service ID for API-based error log access
+- `--max-error-patterns` (optional, default: 20): Maximum number of error patterns to extract
+- `--error-log-lines` (optional, default: 5000): Number of lines to read from error log tail
+- `--max-turns` (optional, default: 30): Maximum number of agent turns/tool calls
+
+#### DBA Orchestrator
+
+```bash
+# One-shot query
+python -m mariadb_db_agents.cli.main orchestrator "Is my database healthy?"
+
+# With query parameter
+python -m mariadb_db_agents.cli.main orchestrator 'Analyze slow queries from the last hour'
+
+# Interactive conversation mode (recommended for multiple questions)
+python -m mariadb_db_agents.cli.main orchestrator --interactive
+```
+
+**Arguments:**
+- `query` (optional): User query about database management. If not provided, will prompt interactively (unless `--interactive` is used)
+- `--max-turns` (optional, default: 30): Maximum number of agent turns/tool calls
+- `--interactive`: Start interactive conversation mode
+
+**Routing Logic:**
+The orchestrator intelligently routes queries to appropriate specialized agents:
+- **"slow queries"** / **"query performance"** → Routes directly to Slow Query Agent
+- **"running queries"** / **"current queries"** → Routes directly to Running Query Agent
+- **"health check"** / **"is my database healthy?"** → Routes to Incident Triage Agent
+- **"why is it slow?"** → Routes based on findings (may use multiple agents)
+- **Unclear queries** → Asks for clarification instead of defaulting to Incident Triage
+
+**Note:** The orchestrator is designed to route directly to specific agents when appropriate, avoiding unnecessary calls to the expensive Incident Triage Agent.
+
 ### Interactive Conversation Mode
 
-Both agents support interactive conversation mode where you can:
+All agents support interactive conversation mode where you can:
 - Ask follow-up questions
 - Request deeper analysis of specific queries
 - Get clarification on recommendations
@@ -216,14 +295,14 @@ Agent: [Suggests specific indexes...]
 
 ## Differences Between Agents
 
-| Aspect | Slow Query Agent | Running Query Agent |
-|--------|------------------|---------------------|
-| **Data Source** | `mysql.slow_log` (historical) | `information_schema.processlist` (real-time) |
-| **Time Window** | Hours/days in past | Current moment snapshot |
-| **Focus** | Optimization, indexing, patterns | Blocking, resource usage, immediate issues |
-| **Analysis** | Aggregation, patterns, query rewrites | Individual queries, locks, waits, real-time metrics |
-| **Performance Metrics** | Aggregated by query digest | Per-thread metrics (current CPU time, lock wait) |
-| **Use Case** | Long-term optimization | Real-time troubleshooting |
+| Aspect | Slow Query Agent | Running Query Agent | Incident Triage Agent | Orchestrator |
+|--------|------------------|---------------------|---------------------|--------------|
+| **Data Source** | `mysql.slow_log` (historical) | `information_schema.processlist` (real-time) | Health metrics, error logs | Routes to other agents |
+| **Time Window** | Hours/days in past | Current moment snapshot | Current snapshot | N/A (meta-agent) |
+| **Focus** | Optimization, indexing, patterns | Blocking, resource usage, immediate issues | Quick health check, issue identification | Intelligent routing |
+| **Analysis** | Aggregation, patterns, query rewrites | Individual queries, locks, waits, real-time metrics | Health snapshot, error patterns, correlations | Multi-agent coordination |
+| **Performance Metrics** | Aggregated by query digest | Per-thread metrics (current CPU time, lock wait) | System-wide metrics, lock waits, I/O | Synthesizes from other agents |
+| **Use Case** | Long-term optimization | Real-time troubleshooting | "Something's wrong, where do I start?" | Unified interface for all tasks |
 
 ## How It Works
 
@@ -245,6 +324,22 @@ Agent: [Suggests specific indexes...]
 5. **Deep Query Analysis**: Runs `EXPLAIN FORMAT=JSON`, inspects schemas/indexes
 6. **Recommendations**: Provides suggestions for killing queries, query rewrites, resource management
 
+### Incident Triage Agent
+
+1. **Health Snapshot**: Gathers minimal "golden snapshot" of critical health metrics (connections, locks, resources, I/O)
+2. **Error Log Analysis**: Reads and extracts patterns from error logs (supports local files and SkySQL API)
+3. **Symptom Correlation**: Correlates symptoms into top 2-3 likely causes
+4. **Actionable Checklist**: Provides prioritized checklist of immediate checks and safe mitigations
+5. **Performance Schema Integration**: Uses `performance_schema` and `information_schema` directly for detailed metrics
+
+### DBA Orchestrator
+
+1. **Intent Understanding**: Parses user queries to understand what they want
+2. **Intelligent Routing**: Routes queries to appropriate specialized agents based on intent
+3. **Multi-Agent Coordination**: Coordinates multiple agents for comprehensive analysis when needed
+4. **Result Synthesis**: Combines results from multiple agents into coherent, actionable reports
+5. **Context Management**: Maintains conversation context across agent interactions
+
 ## Performance Schema Integration
 
 Both agents leverage MariaDB's Performance Schema for advanced performance analysis when available. The agents gracefully degrade if Performance Schema is not enabled.
@@ -254,12 +349,13 @@ See `enable_performance_schema.sql` for setup instructions.
 ## Architecture
 
 **Shared Components (`common/`):**
-- **`config.py`**: Manages OpenAI API and database configuration
-- **`db_client.py`**: Provides read-only database operations with safety checks
+- **`config.py`**: Manages OpenAI API, database, and SkySQL configuration
+- **`db_client.py`**: Provides read-only database operations with safety checks, error log reading, SkySQL API integration
 - **`guardrails.py`**: Implements input/output guardrails
 - **`observability.py`**: Tracks LLM usage metrics (tokens, round trips)
 - **`performance_metrics.py`**: Data structures and helper functions for Performance Schema
 - **`performance_tools.py`**: Tools for querying Performance Schema
+- **`sys_schema_tools.py`**: Tools for querying performance_schema and information_schema tables directly
 
 **Agent Structure:**
 Each agent follows a consistent structure:
@@ -278,7 +374,7 @@ Upcoming agents:
 - **Capacity Planning Agent**: Predict resource exhaustion
 - **Schema Health Agent**: Identify unused indexes and optimization opportunities
 - **Security Audit Agent**: Audit permissions and security
-- **DBA Orchestrator**: Routes queries to appropriate specialized agents
+- **Lock & Deadlock Detective Agent**: Detect lock contention and deadlocks
 
 ## Contributing
 

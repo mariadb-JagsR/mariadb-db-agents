@@ -26,9 +26,18 @@ Examples:
   # Analyze running queries
   mariadb-db-agents running-query --min-time-seconds 5
 
+  # Perform incident triage
+  mariadb-db-agents incident-triage --error-log-path /var/log/mysql/error.log
+
+  # Use orchestrator (intelligent routing to specialized agents)
+  mariadb-db-agents orchestrator "Is my database healthy?"
+  mariadb-db-agents orchestrator "Analyze slow queries from the last hour"
+  mariadb-db-agents orchestrator --interactive
+
   # Interactive conversation mode
   mariadb-db-agents slow-query --interactive
   mariadb-db-agents running-query --interactive
+  mariadb-db-agents orchestrator --interactive
 
 For more information about a specific agent, use:
   mariadb-db-agents <agent> --help
@@ -96,6 +105,72 @@ For more information about a specific agent, use:
         help="Start interactive conversation mode instead of one-time analysis.",
     )
 
+    # Incident Triage Agent
+    incident_triage_parser = subparsers.add_parser(
+        "incident-triage",
+        help="Perform incident triage: identify what's wrong and where to look first",
+        description="Incident Triage Agent: Quickly identifies database issues and provides prioritized checklist. "
+                    "Database connection is configured via environment variables (DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_DATABASE).",
+    )
+    incident_triage_parser.add_argument(
+        "--error-log-path",
+        type=str,
+        default=None,
+        help="Path to error log file (for local file access). If not provided, will attempt SkySQL API if service_id is set.",
+    )
+    incident_triage_parser.add_argument(
+        "--service-id",
+        type=str,
+        default=None,
+        help="SkySQL service ID for API-based error log access (if not using local file).",
+    )
+    incident_triage_parser.add_argument(
+        "--max-error-patterns",
+        type=int,
+        default=20,
+        help="Maximum number of error patterns to extract from error log (default: 20).",
+    )
+    incident_triage_parser.add_argument(
+        "--error-log-lines",
+        type=int,
+        default=5000,
+        help="Number of lines to read from error log tail (default: 5000).",
+    )
+    incident_triage_parser.add_argument(
+        "--max-turns",
+        type=int,
+        default=30,
+        help="Maximum number of agent turns/tool calls (default: 30). Increase if agent needs more steps to complete analysis.",
+    )
+
+    # Orchestrator Agent
+    orchestrator_parser = subparsers.add_parser(
+        "orchestrator",
+        help="DBA Orchestrator: Intelligently routes queries to specialized agents",
+        description="Orchestrator Agent: A meta-agent that routes user queries to appropriate specialized agents "
+                    "and synthesizes comprehensive reports. "
+                    "Database connection is configured via environment variables (DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_DATABASE).",
+    )
+    orchestrator_parser.add_argument(
+        "query",
+        nargs="?",
+        type=str,
+        default=None,
+        help="User query about database management (e.g., 'Is my database healthy?', 'Analyze slow queries'). "
+             "If not provided, will prompt interactively (unless --interactive is used).",
+    )
+    orchestrator_parser.add_argument(
+        "--max-turns",
+        type=int,
+        default=30,
+        help="Maximum number of agent turns/tool calls (default: 30). Increase if orchestrator needs more steps.",
+    )
+    orchestrator_parser.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Start interactive conversation mode instead of one-time analysis.",
+    )
+
     return parser
 
 
@@ -142,6 +217,40 @@ def main() -> int:
             if args.include_sleeping:
                 agent_args.append("--include-sleeping")
             return agent_main(agent_args)
+
+    elif args.agent == "incident-triage":
+        # Import and run CLI mode
+        from ..agents.incident_triage.main import main as agent_main
+        # Convert args to list for agent_main
+        agent_args = [
+            "--max-error-patterns", str(args.max_error_patterns),
+            "--error-log-lines", str(args.error_log_lines),
+            "--max-turns", str(args.max_turns),
+        ]
+        if args.error_log_path:
+            agent_args.extend(["--error-log-path", args.error_log_path])
+        if args.service_id:
+            agent_args.extend(["--service-id", args.service_id])
+        return agent_main(agent_args)
+
+    elif args.agent == "orchestrator":
+        if args.interactive:
+            # Import and run conversation mode
+            import asyncio
+            from ..orchestrator.conversation import main as conversation_main
+            return asyncio.run(conversation_main())
+        else:
+            # Import and run CLI mode
+            from ..orchestrator.main import main as orchestrator_main
+            # Convert args to list for orchestrator_main
+            orchestrator_args = [
+                "--max-turns", str(args.max_turns),
+            ]
+            # Handle query - if provided as positional arg, use it; otherwise it's None
+            # The orchestrator will prompt interactively if query is None
+            if hasattr(args, 'query') and args.query:
+                orchestrator_args.append(args.query)
+            return orchestrator_main(orchestrator_args)
 
     else:
         print(f"Unknown agent: {args.agent}", file=sys.stderr)
