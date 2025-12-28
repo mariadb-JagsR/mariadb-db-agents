@@ -5,7 +5,13 @@ from __future__ import annotations
 
 from agents import Agent, ModelSettings
 from ..common.config import OpenAIConfig
-from .tools import analyze_slow_queries, analyze_running_queries, perform_incident_triage
+from .tools import (
+    analyze_slow_queries,
+    analyze_running_queries,
+    perform_incident_triage,
+    check_replication_health,
+    execute_database_query,
+)
 from ..common.guardrails import input_guardrail, output_guardrail
 
 
@@ -36,6 +42,17 @@ Available Specialized Agents:
    - Parameters: error_log_path (local file), service_id (SkySQL API), max_error_patterns, error_log_lines, max_turns
    - Note: This is often a good starting point for comprehensive health checks
 
+4. **Replication Health Agent** (check_replication_health)
+   - Purpose: Monitors replication lag across all replicas, detects failures, and provides recommendations
+   - Use when: User asks about replication health, replication lag, replication status, replication failures
+   - Parameters: max_executions (number of times to discover replicas, default: 10), max_turns (agent turns, default: 30)
+   - Note: Handles MaxScale load balancing automatically to discover all replicas (SkySQL max: 5 replicas)
+
+5. **Database Inspector Agent** (execute_database_query)
+   - Purpose: Execute read-only SQL queries to investigate database state, check status/variables, explore schema
+   - Use when: Other agents recommend SQL queries, user asks to check specific data, need to follow up on recommendations
+   - Parameters: sql (query to execute), max_rows (default: 100), timeout_seconds (default: 10)
+
 Routing Guidelines:
 
 **CRITICAL: Route directly to the most appropriate agent. Do NOT default to Incident Triage Agent unless necessary.**
@@ -43,6 +60,7 @@ Routing Guidelines:
 **Direct Routing (Preferred):**
 - "analyze slow queries" / "slow query performance" / "query optimization" / "slow queries from last hour" → analyze_slow_queries() DIRECTLY
 - "running queries" / "current queries" / "what's running now" / "blocking queries" / "long-running queries" → analyze_running_queries() DIRECTLY
+- "replication health" / "replication lag" / "replication status" / "check replication" / "is replication working" → check_replication_health() DIRECTLY
 - "health check" / "is my database healthy" / "database status" → perform_incident_triage() (appropriate for health checks)
 - "something's wrong" / "incident" / "troubleshoot" → perform_incident_triage() (appropriate for incidents)
 
@@ -55,6 +73,7 @@ Routing Guidelines:
 **When NOT to Use Incident Triage Agent:**
 - User asks about specific slow queries → Use analyze_slow_queries() DIRECTLY
 - User asks about current/running queries → Use analyze_running_queries() DIRECTLY
+- User asks about replication health/lag → Use check_replication_health() DIRECTLY
 - User asks about query performance → Use analyze_slow_queries() DIRECTLY
 - User asks about blocking queries → Use analyze_running_queries() DIRECTLY
 
@@ -200,6 +219,8 @@ def create_orchestrator_agent() -> Agent:
             analyze_slow_queries,
             analyze_running_queries,
             perform_incident_triage,
+            check_replication_health,
+            execute_database_query,
         ],
         input_guardrails=[input_guardrail],
         output_guardrails=[output_guardrail],

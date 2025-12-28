@@ -145,3 +145,92 @@ async def perform_incident_triage(
             "error": str(e),
         }
 
+
+@function_tool
+async def check_replication_health(
+    max_executions: int = 10,
+    max_turns: int = 30,
+) -> dict[str, Any]:
+    """
+    Invoke Replication Health Agent to monitor replication lag and health across all replicas.
+    
+    Use this when the user asks about:
+    - Replication health, replication lag, replication status
+    - "Why is replication lagging?"
+    - "Check replication health"
+    - "Is replication working?"
+    - Replication failures, replication errors
+    
+    This agent monitors all replicas, detects lag, identifies failures, and provides recommendations.
+    
+    Args:
+        max_executions: Number of times to execute SHOW ALL SLAVES STATUS to discover replicas (default: 10)
+        max_turns: Maximum number of agent turns/tool calls (default: 30)
+    
+    Returns:
+        Dictionary with 'report' (agent output) and 'agent' (agent name)
+    """
+    from ..agents.replication_health.main import run_agent_async
+    
+    try:
+        result = await run_agent_async(
+            max_executions=max_executions,
+            max_turns=max_turns,
+        )
+        return {
+            "report": result,
+            "agent": "replication_health",
+            "success": True,
+        }
+    except Exception as e:
+        return {
+            "report": f"Error running Replication Health Agent: {str(e)}",
+            "agent": "replication_health",
+            "success": False,
+            "error": str(e),
+        }
+
+
+@function_tool
+async def execute_database_query(
+    sql: str,
+    max_rows: int = 100,
+    timeout_seconds: int = 10,
+) -> dict[str, Any]:
+    """
+    Execute a read-only SQL query using the Database Inspector Agent.
+    
+    Use this to execute SQL queries recommended by other agents or requested by users.
+    Supports SELECT, SHOW, DESCRIBE, EXPLAIN statements on information_schema,
+    performance_schema, GLOBAL_STATUS, GLOBAL_VARIABLES, and user tables.
+    
+    Args:
+        sql: Read-only SQL statement to execute
+        max_rows: Maximum rows to return (default: 100)
+        timeout_seconds: Query timeout (default: 10)
+    
+    Returns:
+        Dictionary with 'report' (query results) and 'agent' (agent name)
+    """
+    from ..agents.database_inspector.main import run_agent_async
+    
+    try:
+        result = await run_agent_async(
+            query=sql,
+            max_rows=max_rows,
+            timeout=timeout_seconds,
+            max_turns=5,  # Inspector agent typically needs few turns
+        )
+        return {
+            "report": result,
+            "agent": "database_inspector",
+            "success": True,
+        }
+    except Exception as e:
+        return {
+            "report": f"Error executing database query: {str(e)}",
+            "agent": "database_inspector",
+            "success": False,
+            "error": str(e),
+        }
+

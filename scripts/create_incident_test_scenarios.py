@@ -409,13 +409,174 @@ class IOIntensiveScenario(IncidentTestScenario):
         self.cleanup()
 
 
+class HighWriteLoadScenario(IncidentTestScenario):
+    """
+    Create high write load with high concurrency and large bulk writes.
+    
+    This scenario:
+    - Creates multiple concurrent threads doing bulk INSERTs
+    - Uses large batch sizes to maximize write throughput
+    - Can generate replication lag if replicas exist
+    - Tests database performance under heavy write load
+    """
+    
+    def __init__(self, config: DBConfig, duration: int = 60, num_threads: int = 10, batch_size: int = 1000):
+        super().__init__(config, duration)
+        self.num_threads = num_threads
+        self.batch_size = batch_size
+    
+    def setup(self):
+        """Create test table if needed."""
+        conn = self.create_connection()
+        if not conn:
+            return False
+        
+        try:
+            cursor = conn.cursor()
+            # Create test table optimized for writes
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS test_high_write_load (
+                    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                    thread_id INT,
+                    batch_id INT,
+                    data VARCHAR(500),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_thread_batch (thread_id, batch_id),
+                    INDEX idx_created (created_at)
+                ) ENGINE=InnoDB
+            """)
+            
+            # Truncate table to start fresh
+            cursor.execute("TRUNCATE TABLE test_high_write_load")
+            conn.commit()
+            
+            cursor.close()
+            logger.info(f"High write load test table ready (threads: {self.num_threads}, batch_size: {self.batch_size})")
+            return True
+        except MySQLError as e:
+            logger.error(f"Failed to setup high write load scenario: {e}")
+            return False
+    
+    def run(self):
+        """Run the high write load scenario."""
+        if not self.setup():
+            return
+        
+        self.running = True
+        logger.info(
+            f"Starting high write load scenario "
+            f"(duration: {self.duration}s, threads: {self.num_threads}, batch_size: {self.batch_size})"
+        )
+        
+        def bulk_writer(thread_id: int):
+            """Thread that performs bulk writes continuously."""
+            conn = self.create_connection()
+            if not conn:
+                return
+            
+            try:
+                cursor = conn.cursor()
+                batch_id = 0
+                total_rows = 0
+                
+                # Keep writing until duration expires
+                start_time = time.time()
+                while self.running and (time.time() - start_time) < self.duration:
+                    try:
+                        # Build bulk INSERT data - no transaction overhead, direct commit
+                        rows_data = []
+                        for i in range(self.batch_size):
+                            # Generate some data to write
+                            data_value = f"thread_{thread_id}_batch_{batch_id}_row_{i}_" + "x" * 200
+                            rows_data.append((thread_id, batch_id, data_value))
+                        
+                        # Execute bulk INSERT using executemany (safe and efficient)
+                        sql = """
+                            INSERT INTO test_high_write_load (thread_id, batch_id, data)
+                            VALUES (%s, %s, %s)
+                        """
+                        cursor.executemany(sql, rows_data)
+                        conn.commit()
+                        
+                        # No sleep - maximum throughput for replication lag generation
+                        
+                        total_rows += self.batch_size
+                        batch_id += 1
+                        
+                        # Log progress every 10 batches
+                        if batch_id % 10 == 0:
+                            logger.debug(
+                                f"Thread {thread_id}: inserted {total_rows} rows "
+                                f"({batch_id} batches)"
+                            )
+                        
+                        # No sleep - maximum throughput for replication lag generation
+                        
+                    except MySQLError as e:
+                        logger.warning(f"Thread {thread_id} batch {batch_id} error: {e}")
+                        try:
+                            conn.rollback()
+                        except Exception:
+                            pass
+                        # Minimal pause before retrying (only on error)
+                        time.sleep(0.01)
+                
+                cursor.close()
+                logger.info(
+                    f"Thread {thread_id} completed: {total_rows} rows in {batch_id} batches"
+                )
+                
+            except Exception as e:
+                logger.error(f"Thread {thread_id} fatal error: {e}")
+            finally:
+                try:
+                    if conn.is_connected():
+                        conn.close()
+                except Exception:
+                    pass  # Ignore errors during cleanup
+        
+        # Start all writer threads immediately (no stagger for maximum concurrency)
+        for i in range(self.num_threads):
+            thread = threading.Thread(target=bulk_writer, args=(i,), daemon=True)
+            thread.start()
+            self.threads.append(thread)
+        
+        logger.info(f"Started {self.num_threads} writer threads")
+        
+        # Wait for duration
+        time.sleep(self.duration)
+        
+        # Give threads a moment to finish current batches
+        time.sleep(2)
+        
+        # Get final statistics
+        try:
+            conn = self.create_connection()
+            if conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT COUNT(*) FROM test_high_write_load")
+                total_rows = cursor.fetchone()[0]
+                cursor.execute("SELECT COUNT(DISTINCT thread_id) FROM test_high_write_load")
+                active_threads = cursor.fetchone()[0]
+                cursor.close()
+                conn.close()
+                logger.info(
+                    f"High write load completed: {total_rows} total rows written "
+                    f"by {active_threads} threads"
+                )
+        except Exception as e:
+            logger.warning(f"Could not get final statistics: {e}")
+        
+        self.cleanup()
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Create test scenarios for Incident Triage Agent"
     )
     parser.add_argument(
         "--scenario",
-        choices=["lock_contention", "long_running", "connection_exhaustion", "io_intensive", "all"],
+        choices=["lock_contention", "long_running", "connection_exhaustion", "io_intensive", "high_write_load", "all"],
         required=True,
         help="Scenario to create"
     )
@@ -429,6 +590,18 @@ def main():
         "--cleanup-only",
         action="store_true",
         help="Only cleanup test tables/connections, don't create problems"
+    )
+    parser.add_argument(
+        "--num-threads",
+        type=int,
+        default=10,
+        help="Number of concurrent threads for high_write_load scenario (default: 10)"
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=1000,
+        help="Batch size (rows per INSERT) for high_write_load scenario (default: 1000)"
     )
     
     args = parser.parse_args()
@@ -459,6 +632,7 @@ def main():
         cursor = conn.cursor()
         cursor.execute("DROP TABLE IF EXISTS test_lock_table")
         cursor.execute("DROP TABLE IF EXISTS test_large_table")
+        cursor.execute("DROP TABLE IF EXISTS test_high_write_load")
         conn.commit()
         cursor.close()
         conn.close()
@@ -473,7 +647,18 @@ def main():
             LongRunningQueryScenario(config, args.duration),
             ConnectionExhaustionScenario(config, args.duration),
             IOIntensiveScenario(config, args.duration),
+            HighWriteLoadScenario(config, args.duration, args.num_threads, args.batch_size),
         ]
+    elif args.scenario == "lock_contention":
+        scenarios = [LockContentionScenario(config, args.duration)]
+    elif args.scenario == "long_running":
+        scenarios = [LongRunningQueryScenario(config, args.duration)]
+    elif args.scenario == "connection_exhaustion":
+        scenarios = [ConnectionExhaustionScenario(config, args.duration)]
+    elif args.scenario == "io_intensive":
+        scenarios = [IOIntensiveScenario(config, args.duration)]
+    elif args.scenario == "high_write_load":
+        scenarios = [HighWriteLoadScenario(config, args.duration, args.num_threads, args.batch_size)]
     elif args.scenario == "lock_contention":
         scenarios = [LockContentionScenario(config, args.duration)]
     elif args.scenario == "long_running":

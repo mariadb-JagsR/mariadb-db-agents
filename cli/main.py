@@ -34,6 +34,13 @@ Examples:
   mariadb-db-agents orchestrator "Analyze slow queries from the last hour"
   mariadb-db-agents orchestrator --interactive
 
+  # Check replication health
+  mariadb-db-agents replication-health
+
+  # Execute SQL queries (Database Inspector)
+  mariadb-db-agents inspector "SELECT * FROM information_schema.tables LIMIT 10"
+  mariadb-db-agents inspector "What tables are in the database?"
+
   # Interactive conversation mode
   mariadb-db-agents slow-query --interactive
   mariadb-db-agents running-query --interactive
@@ -171,6 +178,63 @@ For more information about a specific agent, use:
         help="Start interactive conversation mode instead of one-time analysis.",
     )
 
+    # Replication Health Agent
+    replication_parser = subparsers.add_parser(
+        "replication-health",
+        help="Check replication health: monitor lag, detect failures, analyze replication status",
+        description="Replication Health Agent: Monitors replication lag across all replicas, detects failures, "
+                    "and provides recommendations. Database connection is configured via environment variables "
+                    "(DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_DATABASE).",
+    )
+    replication_parser.add_argument(
+        "--max-executions",
+        type=int,
+        default=10,
+        help="Number of times to execute SHOW ALL SLAVES STATUS to discover replicas (default: 10). "
+             "SkySQL has a maximum of 5 replicas, so 10 executions ensures coverage.",
+    )
+    replication_parser.add_argument(
+        "--max-turns",
+        type=int,
+        default=30,
+        help="Maximum number of agent turns/tool calls (default: 30). Increase if agent needs more steps.",
+    )
+
+    # Database Inspector Agent
+    inspector_parser = subparsers.add_parser(
+        "inspector",
+        help="Database Inspector: Execute read-only SQL queries and explore database",
+        description="Database Inspector Agent: Execute read-only SQL queries, check status/variables, "
+                    "explore schema, and investigate database state. "
+                    "Database connection is configured via environment variables "
+                    "(DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_DATABASE).",
+    )
+    inspector_parser.add_argument(
+        "query",
+        nargs="?",
+        type=str,
+        default=None,
+        help="SQL query to execute or question about the database (e.g., 'SELECT * FROM information_schema.tables', 'What tables are in the database?')",
+    )
+    inspector_parser.add_argument(
+        "--max-rows",
+        type=int,
+        default=100,
+        help="Maximum number of rows to return (default: 100)",
+    )
+    inspector_parser.add_argument(
+        "--timeout",
+        type=int,
+        default=10,
+        help="Query timeout in seconds (default: 10)",
+    )
+    inspector_parser.add_argument(
+        "--max-turns",
+        type=int,
+        default=10,
+        help="Maximum number of agent turns/tool calls (default: 10)",
+    )
+
     return parser
 
 
@@ -251,6 +315,29 @@ def main() -> int:
             if hasattr(args, 'query') and args.query:
                 orchestrator_args.append(args.query)
             return orchestrator_main(orchestrator_args)
+
+    elif args.agent == "replication-health":
+        # Import and run replication health agent
+        from ..agents.replication_health.main import main as replication_main
+        # Convert args to list for replication_main
+        replication_args = [
+            "--max-executions", str(args.max_executions),
+            "--max-turns", str(args.max_turns),
+        ]
+        return replication_main(replication_args)
+
+    elif args.agent == "inspector":
+        # Import and run database inspector agent
+        from ..agents.database_inspector.main import main as inspector_main
+        # Convert args to list for inspector_main
+        inspector_args = [
+            "--max-rows", str(args.max_rows),
+            "--timeout", str(args.timeout),
+            "--max-turns", str(args.max_turns),
+        ]
+        if args.query:
+            inspector_args.append(args.query)
+        return inspector_main(inspector_args)
 
     else:
         print(f"Unknown agent: {args.agent}", file=sys.stderr)
