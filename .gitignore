@@ -18,9 +18,19 @@ ENV/
 # Environment variables
 .env
 .env.local
+.env.backup.*
 
 # Logs
 *.log
+
+# Python package metadata
+*.egg-info/
+dist/
+build/
+
+# Test data files
+*_test_*.json
+skysql_error_logs_*.json
 
 # Conversation databases
 *.db
