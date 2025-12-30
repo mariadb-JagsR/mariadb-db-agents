@@ -77,6 +77,12 @@ For more information about a specific agent, use:
         help="Maximum number of query patterns to deep-analyze (default: 8).",
     )
     slow_query_parser.add_argument(
+        "--slow-log-path",
+        type=str,
+        default=None,
+        help="Path to slow query log file (for local file access). If provided, will read from this file instead of mysql.slow_log table.",
+    )
+    slow_query_parser.add_argument(
         "--interactive",
         action="store_true",
         help="Start interactive conversation mode instead of one-time analysis.",
@@ -252,27 +258,29 @@ def main() -> int:
         if args.interactive:
             # Import and run conversation mode
             import asyncio
-            from ..agents.slow_query.conversation import main as conversation_main
+            from mariadb_db_agents.agents.slow_query.conversation import main as conversation_main
             return asyncio.run(conversation_main())
         else:
             # Import and run CLI mode
-            from ..agents.slow_query.main import main as agent_main
+            from mariadb_db_agents.agents.slow_query.main import main as agent_main
             # Convert args to list for agent_main
             agent_args = [
                 "--hours", str(args.hours),
                 "--max-patterns", str(args.max_patterns),
             ]
+            if hasattr(args, 'slow_log_path') and args.slow_log_path:
+                agent_args.extend(["--slow-log-path", args.slow_log_path])
             return agent_main(agent_args)
 
     elif args.agent == "running-query":
         if args.interactive:
             # Import and run conversation mode
             import asyncio
-            from ..agents.running_query.conversation import main as conversation_main
+            from mariadb_db_agents.agents.running_query.conversation import main as conversation_main
             return asyncio.run(conversation_main())
         else:
             # Import and run CLI mode
-            from ..agents.running_query.main import main as agent_main
+            from mariadb_db_agents.agents.running_query.main import main as agent_main
             # Convert args to list for agent_main
             agent_args = [
                 "--min-time-seconds", str(args.min_time_seconds),
@@ -284,7 +292,7 @@ def main() -> int:
 
     elif args.agent == "incident-triage":
         # Import and run CLI mode
-        from ..agents.incident_triage.main import main as agent_main
+        from mariadb_db_agents.agents.incident_triage.main import main as agent_main
         # Convert args to list for agent_main
         agent_args = [
             "--max-error-patterns", str(args.max_error_patterns),
@@ -301,11 +309,11 @@ def main() -> int:
         if args.interactive:
             # Import and run conversation mode
             import asyncio
-            from ..orchestrator.conversation import main as conversation_main
+            from mariadb_db_agents.orchestrator.conversation import main as conversation_main
             return asyncio.run(conversation_main())
         else:
             # Import and run CLI mode
-            from ..orchestrator.main import main as orchestrator_main
+            from mariadb_db_agents.orchestrator.main import main as orchestrator_main
             # Convert args to list for orchestrator_main
             orchestrator_args = [
                 "--max-turns", str(args.max_turns),
@@ -318,7 +326,7 @@ def main() -> int:
 
     elif args.agent == "replication-health":
         # Import and run replication health agent
-        from ..agents.replication_health.main import main as replication_main
+        from mariadb_db_agents.agents.replication_health.main import main as replication_main
         # Convert args to list for replication_main
         replication_args = [
             "--max-executions", str(args.max_executions),
@@ -328,7 +336,7 @@ def main() -> int:
 
     elif args.agent == "inspector":
         # Import and run database inspector agent
-        from ..agents.database_inspector.main import main as inspector_main
+        from mariadb_db_agents.agents.database_inspector.main import main as inspector_main
         # Convert args to list for inspector_main
         inspector_args = [
             "--max-rows", str(args.max_rows),

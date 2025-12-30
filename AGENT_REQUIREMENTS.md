@@ -6,9 +6,12 @@ This document consolidates all requirements identified for the MariaDB Database 
 
 ### ✅ Implemented Agents
 
-1. **Slow Query Agent** - Analyzes historical slow queries from slow query logs
+1. **Slow Query Agent** - Analyzes historical slow queries from slow query logs (supports mysql.slow_log table and local log files)
 2. **Running Query Agent** - Analyzes currently executing SQL queries in real-time
-3. **Incident Triage Agent** - Meta-agent that quickly identifies database issues, correlates symptoms, and provides actionable checklists
+3. **Incident Triage Agent** - Meta-agent that quickly identifies database issues, correlates symptoms, and provides actionable checklists (supports local error log files and SkySQL API)
+4. **DBA Orchestrator** - Meta-agent that intelligently routes queries to specialized agents and synthesizes comprehensive reports
+5. **Replication Health Agent** - Monitors replication lag, detects failures, and recommends optimizations (works with SkySQL/MaxScale)
+6. **Database Inspector Agent** - Executes read-only SQL queries for follow-up analysis and interactive investigation
 
 ---
 
@@ -450,8 +453,29 @@ This document consolidates all requirements identified for the MariaDB Database 
 
 #### 15. DBA Orchestrator Agent ⭐⭐⭐⭐⭐
 **Priority**: P0 (Highest)  
-**Status**: Planned  
+**Status**: ✅ **IMPLEMENTED**  
 **Source**: Mentioned in README and HIGH_VALUE_AUTOMATION_OPPORTUNITIES.md
+
+**Implementation Notes:**
+- Intelligent routing to specialized agents based on user queries
+- Multi-agent coordination for comprehensive analysis
+- Result synthesis from multiple agents
+- Interactive conversation mode with context management
+- Supports all implemented agents: Slow Query, Running Query, Incident Triage, Replication Health, Database Inspector
+
+---
+
+#### 16. Database Inspector Agent ⭐⭐⭐⭐
+**Priority**: P1 (High)  
+**Status**: ✅ **IMPLEMENTED**  
+**Source**: Created to enable orchestrator follow-up on recommendations
+
+**Implementation Notes:**
+- Executes read-only SQL queries (SELECT, SHOW, DESCRIBE, EXPLAIN)
+- Supports querying information_schema, performance_schema, GLOBAL_STATUS, GLOBAL_VARIABLES
+- Provides formatted results with context and interpretation
+- Enforces read-only operations with safety guardrails
+- Integrated with orchestrator for seamless follow-up on agent recommendations
 
 **Requirements:**
 - Routes user queries to the appropriate specialized agent
@@ -606,7 +630,7 @@ Several agents have SkySQL-specific value:
 
 | Agent | Business Value | Technical Complexity | User Demand | Priority | Phase |
 |-------|---------------|---------------------|-------------|----------|-------|
-| **Replication Health Agent** | ⭐⭐⭐⭐⭐ | Medium | High | **P0** | Phase 1 |
+| **Replication Health Agent** | ⭐⭐⭐⭐⭐ | Medium | High | **✅ IMPLEMENTED** | Phase 1 |
 | **Lock & Deadlock Detective** | ⭐⭐⭐⭐⭐ | Low-Medium | High | **P0** | Phase 1 |
 | **Connection Pool Agent** | ⭐⭐⭐⭐⭐ | Low-Medium | High | **P0** | Phase 2 |
 | **Schema Health & Index Advisor** | ⭐⭐⭐⭐ | Medium | Medium | **P1** | Phase 2 |
@@ -618,7 +642,9 @@ Several agents have SkySQL-specific value:
 | **Migration Planning Agent** | ⭐⭐⭐ | Low-Medium | Low | **P2** | Phase 4 |
 | **Multi-Tenant Agent** | ⭐⭐⭐ | High | Low (niche) | **P3** | Phase 4 |
 | **Query Pattern Analysis** | ⭐⭐⭐ | Medium | Low | **P3** | Phase 4 |
-| **DBA Orchestrator** | ⭐⭐⭐⭐⭐ | Medium | High | **P0** | Phase 1-2 |
+| **DBA Orchestrator** | ⭐⭐⭐⭐⭐ | Medium | High | **✅ IMPLEMENTED** | Phase 1-2 |
+| **Replication Health Agent** | ⭐⭐⭐⭐⭐ | Medium | High | **✅ IMPLEMENTED** | Phase 1 |
+| **Database Inspector Agent** | ⭐⭐⭐⭐ | Low | Medium | **✅ IMPLEMENTED** | Phase 1 |
 
 ---
 

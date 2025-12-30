@@ -7,3 +7,4 @@ AI-powered agents for analyzing and optimizing MariaDB databases.
 
 __version__ = "0.1.0"
 
+

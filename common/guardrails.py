@@ -111,13 +111,48 @@ async def validate_output_guardrail(
     - Output doesn't contain sensitive information (passwords, API keys)
     - Output doesn't suggest executing dangerous SQL
     """
-    output_str = str(agent_output) if agent_output else ""
+    # Handle different output types
+    if agent_output is None:
+        output_str = ""
+    elif hasattr(agent_output, "final_output"):
+        # Handle Runner result objects
+        output_str = str(agent_output.final_output) if agent_output.final_output else ""
+    elif hasattr(agent_output, "content"):
+        # Handle message objects
+        output_str = str(agent_output.content) if agent_output.content else ""
+    elif hasattr(agent_output, "messages") and agent_output.messages:
+        # Handle result objects with messages list
+        last_msg = agent_output.messages[-1]
+        if hasattr(last_msg, "content"):
+            output_str = str(last_msg.content) if last_msg.content else ""
+        elif isinstance(last_msg, dict):
+            output_str = str(last_msg.get("content", ""))
+        else:
+            output_str = str(last_msg)
+    else:
+        output_str = str(agent_output) if agent_output else ""
 
-    # Check for empty output
-    if not output_str or not output_str.strip():
+    # Check for empty output (but allow whitespace-only if it's formatted output)
+    # Also allow error messages to pass through
+    if not output_str or (not output_str.strip() and len(output_str) < 10):
+        # If output is empty but there were tool calls or errors, don't trigger
+        # This allows the agent to report errors properly
+        if hasattr(agent_output, "messages") and agent_output.messages:
+            # Check if there are any error messages or tool calls
+            has_content = any(
+                hasattr(msg, "content") and msg.content 
+                or (isinstance(msg, dict) and msg.get("content"))
+                for msg in agent_output.messages
+            )
+            if has_content:
+                return GuardrailFunctionOutput(
+                    tripwire_triggered=False,
+                    output_info={"status": "Output validated - has message content"},
+                )
+        
         return GuardrailFunctionOutput(
             tripwire_triggered=True,
-            output_info={"reason": "Empty output detected"},
+            output_info={"reason": "Empty output detected", "output_type": type(agent_output).__name__},
         )
 
     # Check for sensitive information patterns

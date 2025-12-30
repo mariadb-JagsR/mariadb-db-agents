@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Query rewrite suggestions
   - Fulltext index detection
   - Performance Schema integration
+  - Support for reading from local slow query log files (`--slow-log-path`)
   
 - **Running Query Agent**: Analyzes currently executing SQL queries in real-time
   - Long-running query detection
@@ -22,17 +23,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Resource-intensive query analysis
   - Performance Schema metrics integration
   
+- **Incident Triage Agent**: Quick health check that identifies database issues and provides actionable checklists
+  - Health snapshot gathering
+  - Error log analysis with pattern extraction
+  - Symptom correlation into likely causes
+  - Performance Schema and information_schema integration
+  - Support for local error log files (`--error-log-path`)
+  - SkySQL API integration for error log access
+  
+- **DBA Orchestrator**: Meta-agent that intelligently routes queries to specialized agents
+  - Intelligent routing based on user intent
+  - Multi-agent coordination
+  - Result synthesis from multiple agents
+  - Interactive conversation mode
+  - Context management across interactions
+  
+- **Replication Health Agent**: Monitors replication lag, detects failures, and recommends optimizations
+  - Replication lag analysis across all replicas
+  - Failure detection and broken chain identification
+  - SkySQL/MaxScale support with automatic replica discovery
+  - Topology recommendations
+  
+- **Database Inspector Agent**: Executes read-only SQL queries for follow-up analysis
+  - Read-only SQL execution (SELECT, SHOW, DESCRIBE, EXPLAIN)
+  - Query result formatting and interpretation
+  - Safety guardrails for read-only enforcement
+  - Integrated with orchestrator for seamless follow-up
+  
 - **Unified CLI**: Single command-line interface for all agents
   - `slow-query` command for slow query analysis
   - `running-query` command for running query analysis
-  - Interactive conversation mode for both agents
+  - `incident-triage` command for health checks
+  - `orchestrator` command for intelligent routing
+  - `replication-health` command for replication monitoring
+  - `inspector` command for SQL query execution
+  - Interactive conversation mode for all agents
   
 - **Common Infrastructure**:
   - Database client with read-only safety checks
   - Performance Schema utilities with MariaDB version compatibility
+  - Direct access to performance_schema and information_schema tables (bypassing sys schema)
   - Guardrails for input/output validation
   - Observability tracking for LLM usage
   - Configuration management via environment variables
+  - Error log reading with pattern extraction (local files and SkySQL API)
+  - Slow query log file reading (local files)
+  - SkySQL API integration for error log access
   
 - **Documentation**:
   - Comprehensive README with setup and usage instructions
@@ -67,14 +103,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
-- Replication Health Agent
 - Connection Pool Agent
 - Capacity Planning Agent
 - Schema Health Agent
 - Security Audit Agent
-- DBA Orchestrator Agent
+- Lock & Deadlock Detective Agent
 - Comprehensive test suite
 - CI/CD pipeline
 
 [0.1.0]: https://github.com/mariadb-JagsR/mariadb-db-agents/releases/tag/v0.1.0
+
 

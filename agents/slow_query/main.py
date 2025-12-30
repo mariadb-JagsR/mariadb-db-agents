@@ -34,12 +34,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=8,
         help="Maximum number of query patterns to deep-analyze.",
     )
+    parser.add_argument(
+        "--slow-log-path",
+        type=str,
+        default=None,
+        help="Path to slow query log file (for local file access). If provided, will read from this file instead of mysql.slow_log table.",
+    )
     return parser.parse_args(argv)
 
 
 async def run_agent_async(
     time_window_hours: float,
     max_patterns: int,
+    slow_log_path: str | None = None,
 ) -> str:
     """
     Run the slow query agent asynchronously.
@@ -47,6 +54,7 @@ async def run_agent_async(
     Args:
         time_window_hours: Time window in hours to analyze
         max_patterns: Maximum number of patterns to analyze
+        slow_log_path: Path to slow query log file (optional)
 
     Returns:
         Final output from the agent
@@ -63,6 +71,10 @@ async def run_agent_async(
         f"Please analyze slow queries for approximately the last {time_window_hours} hour(s). "
         f"Focus on at most {max_patterns} of the most impactful query patterns."
     )
+    
+    # Add slow log file context if provided
+    if slow_log_path:
+        user_prompt += f"\n\nSlow query log file is available at: {slow_log_path}. Please read from this file instead of mysql.slow_log table."
 
     # Run the agent
     result = await Runner.run(agent, user_prompt)
@@ -86,6 +98,7 @@ def main(argv: list[str] | None = None) -> int:
             run_agent_async(
                 time_window_hours=args.hours,
                 max_patterns=args.max_patterns,
+                slow_log_path=args.slow_log_path,
             )
         )
 

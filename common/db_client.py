@@ -257,19 +257,52 @@ def tail_slow_log_file(
     tail_lines: int = 5000,
 ) -> str:
     """
-    Stub for reading the tail of the slow query log file.
-
-    In a real MariaDB Cloud / SkySQL deployment, you would NOT read
-    the filesystem from here. Instead:
-      - Expose an internal API or log service that can return the
-        last N bytes / lines of the slow query log.
-
-    For now, raise an error so it's obvious this requires implementation.
+    Read the tail of the MariaDB slow query log file.
+    
+    Supports local file access for development/testing.
+    
+    Args:
+        path: Absolute path to slow query log file
+        max_bytes: Maximum number of bytes to read from the end (default: 1_000_000)
+        tail_lines: Approximate number of lines from the end (default: 5000)
+    
+    Returns:
+        String content of the log file tail
     """
-    raise NotImplementedError(
-        "tail_slow_log_file is not implemented. "
-        "Replace this with a call to your internal log API."
-    )
+    import os
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    if not path:
+        raise ValueError("path must be provided to read slow query log file")
+    
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Slow query log file not found: {path}")
+    
+    if not os.path.isfile(path):
+        raise ValueError(f"Path is not a file: {path}")
+    
+    # Read tail of file
+    file_size = os.path.getsize(path)
+    bytes_to_read = min(max_bytes, file_size)
+    
+    with open(path, 'r', encoding='utf-8', errors='ignore') as f:
+        if bytes_to_read < file_size:
+            # Seek to position
+            f.seek(file_size - bytes_to_read)
+            # Skip partial line
+            f.readline()
+        
+        content = f.read()
+        lines = content.split('\n')
+        total_lines = len(lines)
+        
+        # Limit to tail_lines if specified
+        if tail_lines and total_lines > tail_lines:
+            content = '\n'.join(lines[-tail_lines:])
+    
+    return content
 
 
 def extract_error_log_patterns(
@@ -731,8 +764,13 @@ def tail_error_log_file(
     
     logger = logging.getLogger(__name__)
     
-    # Try SkySQL API first if service_id provided
-    if service_id:
+    # Priority: if path is explicitly provided, use it and ignore service_id
+    # Only use SkySQL API if path is not provided
+    if path:
+        # Explicit path provided - use local file access
+        pass  # Will handle below
+    elif service_id:
+        # No path provided - try SkySQL API if service_id available
         try:
             from .config import SkySQLConfig
             

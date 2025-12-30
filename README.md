@@ -10,7 +10,9 @@ This project is a comprehensive platform for MariaDB database management with sp
 2. **Running Query Agent**: Analyzes currently executing SQL queries in real-time
 3. **Incident Triage Agent**: Quick health check that identifies database issues and provides actionable checklists
 4. **DBA Orchestrator**: Meta-agent that intelligently routes queries to specialized agents and synthesizes comprehensive reports
-5. **More agents coming soon**: Replication health, connection pool management, capacity planning, and more
+5. **Replication Health Agent**: Monitors replication lag, detects failures, and recommends optimizations
+6. **Database Inspector Agent**: Executes read-only SQL queries for follow-up analysis and interactive investigation
+7. **More agents coming soon**: Connection pool management, capacity planning, lock & deadlock detection, and more
 
 All agents use the **OpenAI Agents SDK** to intelligently query the database and provide actionable recommendations.
 
@@ -29,7 +31,10 @@ All agents use the **OpenAI Agents SDK** to intelligently query the database and
 - **Interactive Mode**: Conversation-based interaction with agents
 - **DBA Orchestrator**: Intelligent routing to specialized agents based on user queries
 - **SkySQL Integration**: Error log access via SkySQL API
-- **Error Log Analysis**: Pattern extraction and analysis from database error logs
+- **Error Log Analysis**: Pattern extraction and analysis from database error logs (supports local files and SkySQL API)
+- **Slow Log File Support**: Read slow query logs from local files or mysql.slow_log table
+- **Replication Monitoring**: Monitor replication lag, detect failures, and analyze replication health
+- **Database Inspector**: Execute read-only SQL queries for interactive investigation and follow-up analysis
 
 ## Project Structure
 
@@ -49,6 +54,16 @@ mariadb_db_agents/
 │   │   └── conversation.py
 │   │
 │   ├── incident_triage/         # Incident triage agent
+│   │   ├── agent.py
+│   │   ├── tools.py
+│   │   └── main.py
+│   │
+│   ├── replication_health/      # Replication health agent
+│   │   ├── agent.py
+│   │   ├── tools.py
+│   │   └── main.py
+│   │
+│   ├── database_inspector/      # Database inspector agent
 │   │   ├── agent.py
 │   │   ├── tools.py
 │   │   └── main.py
@@ -151,7 +166,7 @@ Edit `.env` with your actual values:
 - `DB_DATABASE`: Database name
 - `SKYSQL_API_KEY`: (Optional) SkySQL API key for error log access
 - `SKYSQL_SERVICE_ID`: (Optional) SkySQL service ID for error log access
-- `SKYSQL_LOG_API_URL`: (Optional) SkySQL log API URL (defaults to public API)
+- `SKYSQL_LOG_API_URL`: (Optional) SkySQL log API URL (defaults to public API: `https://api.skysql.com/observability/v2/logs`)
 
 **Note**: Database connections are configured via environment variables (DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_DATABASE).
 
@@ -165,11 +180,23 @@ Use the unified CLI to access all agents:
 # Analyze slow queries
 python -m mariadb_db_agents.cli.main slow-query --hours 1 --max-patterns 5
 
+# Analyze slow queries from a log file
+python -m mariadb_db_agents.cli.main slow-query --slow-log-path /var/log/mysql/slow.log
+
 # Analyze running queries
 python -m mariadb_db_agents.cli.main running-query --min-time-seconds 5.0
 
 # Perform incident triage
 python -m mariadb_db_agents.cli.main incident-triage
+
+# Perform incident triage with error log file
+python -m mariadb_db_agents.cli.main incident-triage --error-log-path /var/log/mysql/error.log
+
+# Check replication health
+python -m mariadb_db_agents.cli.main replication-health
+
+# Execute a database query
+python -m mariadb_db_agents.cli.main inspector "SELECT * FROM information_schema.tables LIMIT 10"
 
 # Use orchestrator (intelligent routing to specialized agents)
 python -m mariadb_db_agents.cli.main orchestrator "Is my database healthy?"
@@ -199,8 +226,9 @@ python -m mariadb_db_agents.agents.slow_query.conversation
 **Arguments:**
 - `--hours` (optional, default: 1.0): Time window in hours to analyze slow queries
 - `--max-patterns` (optional, default: 8): Maximum number of query patterns to deep-analyze
+- `--slow-log-path` (optional): Path to slow query log file. If provided, reads from file instead of mysql.slow_log table
 
-**Note**: Database connection is configured via environment variables (DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_DATABASE).
+**Note**: Database connection is configured via environment variables (DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_DATABASE). The agent prefers reading from mysql.slow_log table, but can read from a local file if `--slow-log-path` is provided.
 
 #### Running Query Agent
 
@@ -239,6 +267,43 @@ python -m mariadb_db_agents.cli.main incident-triage --service-id YOUR_SERVICE_I
 - `--error-log-lines` (optional, default: 5000): Number of lines to read from error log tail
 - `--max-turns` (optional, default: 30): Maximum number of agent turns/tool calls
 
+#### Replication Health Agent
+
+```bash
+# Check replication health
+python -m mariadb_db_agents.cli.main replication-health
+
+# With custom parameters
+python -m mariadb_db_agents.cli.main replication-health --max-executions 10 --max-turns 20
+```
+
+**Arguments:**
+- `--max-executions` (optional, default: 10): Number of times to execute SHOW ALL SLAVES STATUS to gather replica information
+- `--max-turns` (optional, default: 20): Maximum number of agent turns/tool calls
+
+**Note**: Works with SkySQL/MaxScale environments. Automatically detects master vs replica connections and gathers status from all replicas.
+
+#### Database Inspector Agent
+
+```bash
+# Execute a SQL query
+python -m mariadb_db_agents.cli.main inspector "SELECT VERSION()"
+
+# Ask a question about the database
+python -m mariadb_db_agents.cli.main inspector "What tables are in the database?"
+
+# With custom parameters
+python -m mariadb_db_agents.cli.main inspector "SELECT * FROM information_schema.tables" --max-rows 50 --timeout 15
+```
+
+**Arguments:**
+- `query` (required): SQL query to execute or question about the database
+- `--max-rows` (optional, default: 100): Maximum number of rows to return
+- `--timeout` (optional, default: 10): Query timeout in seconds
+- `--max-turns` (optional, default: 10): Maximum number of agent turns/tool calls
+
+**Note**: Executes read-only queries only (SELECT, SHOW, DESCRIBE, EXPLAIN). Useful for follow-up analysis after other agents provide recommendations.
+
 #### DBA Orchestrator
 
 ```bash
@@ -261,6 +326,8 @@ python -m mariadb_db_agents.cli.main orchestrator --interactive
 The orchestrator intelligently routes queries to appropriate specialized agents:
 - **"slow queries"** / **"query performance"** → Routes directly to Slow Query Agent
 - **"running queries"** / **"current queries"** → Routes directly to Running Query Agent
+- **"replication"** / **"replica lag"** → Routes directly to Replication Health Agent
+- **"execute SQL"** / **"query database"** → Routes directly to Database Inspector Agent
 - **"health check"** / **"is my database healthy?"** → Routes to Incident Triage Agent
 - **"why is it slow?"** → Routes based on findings (may use multiple agents)
 - **Unclear queries** → Asks for clarification instead of defaulting to Incident Triage
@@ -295,25 +362,27 @@ Agent: [Suggests specific indexes...]
 
 ## Differences Between Agents
 
-| Aspect | Slow Query Agent | Running Query Agent | Incident Triage Agent | Orchestrator |
-|--------|------------------|---------------------|---------------------|--------------|
-| **Data Source** | `mysql.slow_log` (historical) | `information_schema.processlist` (real-time) | Health metrics, error logs | Routes to other agents |
-| **Time Window** | Hours/days in past | Current moment snapshot | Current snapshot | N/A (meta-agent) |
-| **Focus** | Optimization, indexing, patterns | Blocking, resource usage, immediate issues | Quick health check, issue identification | Intelligent routing |
-| **Analysis** | Aggregation, patterns, query rewrites | Individual queries, locks, waits, real-time metrics | Health snapshot, error patterns, correlations | Multi-agent coordination |
-| **Performance Metrics** | Aggregated by query digest | Per-thread metrics (current CPU time, lock wait) | System-wide metrics, lock waits, I/O | Synthesizes from other agents |
-| **Use Case** | Long-term optimization | Real-time troubleshooting | "Something's wrong, where do I start?" | Unified interface for all tasks |
+| Aspect | Slow Query Agent | Running Query Agent | Incident Triage Agent | Replication Health | Database Inspector | Orchestrator |
+|--------|------------------|---------------------|---------------------|-------------------|-------------------|--------------|
+| **Data Source** | `mysql.slow_log` or log file (historical) | `information_schema.processlist` (real-time) | Health metrics, error logs | Replication status, lag metrics | Any read-only SQL | Routes to other agents |
+| **Time Window** | Hours/days in past | Current moment snapshot | Current snapshot | Current + trends | N/A | N/A (meta-agent) |
+| **Focus** | Optimization, indexing, patterns | Blocking, resource usage, immediate issues | Quick health check, issue identification | Replication lag, failures, topology | Interactive SQL queries | Intelligent routing |
+| **Analysis** | Aggregation, patterns, query rewrites | Individual queries, locks, waits, real-time metrics | Health snapshot, error patterns, correlations | Lag analysis, failure detection, recommendations | Query execution, result formatting | Multi-agent coordination |
+| **Performance Metrics** | Aggregated by query digest | Per-thread metrics (current CPU time, lock wait) | System-wide metrics, lock waits, I/O | Replication lag, binlog position, GTID | Query results | Synthesizes from other agents |
+| **Use Case** | Long-term optimization | Real-time troubleshooting | "Something's wrong, where do I start?" | "Is replication healthy?" | "Execute this SQL query" | Unified interface for all tasks |
 
 ## How It Works
 
 ### Slow Query Agent
 
 1. **Configuration Discovery**: Checks if slow query logging is enabled and where logs are stored
-2. **Query Retrieval**: Aggregates slow queries from `mysql.slow_log` table or slow query log file
+2. **Query Retrieval**: Aggregates slow queries from `mysql.slow_log` table or slow query log file (if `--slow-log-path` provided)
 3. **Pattern Analysis**: Identifies top query patterns by total execution time, execution count, and impact
 4. **Performance Schema Analysis**: Retrieves aggregated metrics (CPU time, lock wait time, I/O statistics)
 5. **Deep Analysis**: Runs `EXPLAIN FORMAT=JSON`, inspects schemas/indexes, analyzes query rewrites
 6. **Recommendations**: Provides prioritized suggestions (query rewrites, indexes, configuration)
+
+**File Support**: The agent can read from local slow query log files when `--slow-log-path` is provided, prioritizing the file over `mysql.slow_log` table.
 
 ### Running Query Agent
 
@@ -331,6 +400,27 @@ Agent: [Suggests specific indexes...]
 3. **Symptom Correlation**: Correlates symptoms into top 2-3 likely causes
 4. **Actionable Checklist**: Provides prioritized checklist of immediate checks and safe mitigations
 5. **Performance Schema Integration**: Uses `performance_schema` and `information_schema` directly for detailed metrics
+
+**File Support**: The agent prioritizes explicit file paths (`--error-log-path`) over SkySQL API. If a file path is provided, it reads only from that file.
+
+### Replication Health Agent
+
+1. **Replication Discovery**: Detects master and replica connections in SkySQL/MaxScale environments
+2. **Status Collection**: Gathers replication status from all replicas using `SHOW ALL SLAVES STATUS`
+3. **Lag Analysis**: Calculates replication lag and identifies lagging replicas
+4. **Failure Detection**: Detects replication failures, broken chains, and error conditions
+5. **Recommendations**: Provides optimization suggestions for replication topology and configuration
+
+**SkySQL Support**: Works with MaxScale load balancing by executing multiple queries to discover all replicas.
+
+### Database Inspector Agent
+
+1. **Query Execution**: Executes read-only SQL queries (SELECT, SHOW, DESCRIBE, EXPLAIN)
+2. **Result Formatting**: Formats query results in clear, readable tables
+3. **Context Provision**: Provides insights and interpretation of query results
+4. **Safety Guardrails**: Ensures only read-only operations are executed
+
+**Use Cases**: Follow-up analysis after other agents provide recommendations, interactive database exploration, checking configuration and status.
 
 ### DBA Orchestrator
 
@@ -369,7 +459,6 @@ Each agent follows a consistent structure:
 See `docs/HIGH_VALUE_AUTOMATION_OPPORTUNITIES.md` for a comprehensive list of planned agents and features.
 
 Upcoming agents:
-- **Replication Health Agent**: Monitor replication lag and health
 - **Connection Pool Agent**: Analyze connection usage and leaks
 - **Capacity Planning Agent**: Predict resource exhaustion
 - **Schema Health Agent**: Identify unused indexes and optimization opportunities

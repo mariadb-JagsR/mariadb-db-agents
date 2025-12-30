@@ -17,3 +17,4 @@ from mariadb_db_agents.cli.main import main
 if __name__ == "__main__":
     sys.exit(main())
 
+

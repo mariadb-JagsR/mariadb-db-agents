@@ -45,6 +45,7 @@ python -m mariadb_db_agents.cli.main orchestrator "Is my database healthy?"
 **What happens:**
 - Orchestrator routes to Incident Triage Agent (quick health check)
 - May also route to Running Query Agent for current state
+- May route to Replication Health Agent if replication issues detected
 - Synthesizes results into comprehensive health report
 
 ### Example 2: Performance Investigation
@@ -76,6 +77,8 @@ The orchestrator can route to:
 1. **Slow Query Agent** - Historical slow query analysis
 2. **Running Query Agent** - Real-time query analysis
 3. **Incident Triage Agent** - Quick health checks and issue identification
+4. **Replication Health Agent** - Monitor replication lag and health
+5. **Database Inspector Agent** - Execute read-only SQL queries for investigation
 
 More agents will be added as they are implemented.
 
@@ -85,6 +88,8 @@ The orchestrator uses LLM-based intent classification to route queries:
 
 - **"slow queries"** / **"query performance"** → Slow Query Agent
 - **"running queries"** / **"current queries"** → Running Query Agent
+- **"replication"** / **"replica lag"** / **"replication health"** → Replication Health Agent
+- **"execute SQL"** / **"query database"** / **"check information_schema"** → Database Inspector Agent
 - **"health check"** / **"something's wrong"** → Incident Triage Agent
 - **"is my database healthy?"** → Incident Triage + Running Query
 - **"why is it slow?"** → Incident Triage → (Slow Query or Running Query based on findings)

@@ -91,17 +91,31 @@ def read_error_log(
     """
     import os
     
-    # If service_id not provided, try environment variable
-    if not service_id:
-        service_id = os.getenv("SKYSQL_SERVICE_ID")
-    
-    result = tail_error_log_file(
-        service_id=service_id,
-        path=path,
-        max_bytes=max_bytes,
-        tail_lines=tail_lines,
-        extract_patterns=extract_patterns,
-        max_patterns=max_patterns,
-    )
+    # Priority: if path is explicitly provided, use it and ignore service_id
+    # Only use SkySQL API if path is not provided
+    if path:
+        # Explicit path provided - use local file, ignore service_id
+        result = tail_error_log_file(
+            service_id=None,  # Explicitly set to None to avoid SkySQL API
+            path=path,
+            max_bytes=max_bytes,
+            tail_lines=tail_lines,
+            extract_patterns=extract_patterns,
+            max_patterns=max_patterns,
+        )
+    else:
+        # No path provided - try SkySQL API if service_id available
+        # If service_id not provided, try environment variable
+        if not service_id:
+            service_id = os.getenv("SKYSQL_SERVICE_ID")
+        
+        result = tail_error_log_file(
+            service_id=service_id,
+            path=None,
+            max_bytes=max_bytes,
+            tail_lines=tail_lines,
+            extract_patterns=extract_patterns,
+            max_patterns=max_patterns,
+        )
     return result
 
