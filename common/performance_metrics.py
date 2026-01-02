@@ -151,50 +151,22 @@ def get_statement_metrics_by_digest(
         
         where_clause = "WHERE " + " AND ".join(conditions) if conditions else ""
         
-        # Check if LOCK_TIME column exists (MariaDB version compatibility)
-        # Some versions use SUM_LOCK_TIME/AVG_LOCK_TIME, others may not have it
-        try:
-            # Try to detect if LOCK_TIME columns exist
-            check_sql = """
-                SELECT COLUMN_NAME 
-                FROM information_schema.COLUMNS 
-                WHERE TABLE_SCHEMA = 'performance_schema' 
-                  AND TABLE_NAME = 'events_statements_summary_by_digest'
-                  AND COLUMN_NAME IN ('SUM_LOCK_TIME', 'AVG_LOCK_TIME')
-                LIMIT 1
-            """
-            lock_time_check = run_readonly_query(sql=check_sql, max_rows=1, timeout_seconds=2, database=None)
-            has_lock_time = lock_time_check and len(lock_time_check) > 0
-        except:
-            has_lock_time = False
-        
-        # Build query with conditional lock time columns
-        if has_lock_time:
-            lock_time_cols = """
-                SUM_LOCK_TIME / 1000000000000 as total_lock_time_sec,
-                AVG_LOCK_TIME / 1000000000000 as avg_lock_time_sec,
-                (SUM_TIMER_WAIT - SUM_LOCK_TIME) / 1000000000000 as total_approximate_cpu_time_sec,
-                (AVG_TIMER_WAIT - AVG_LOCK_TIME) / 1000000000000 as avg_approximate_cpu_time_sec,
-            """
-        else:
-            lock_time_cols = """
-                NULL as total_lock_time_sec,
-                NULL as avg_lock_time_sec,
-                SUM_TIMER_WAIT / 1000000000000 as total_approximate_cpu_time_sec,
-                AVG_TIMER_WAIT / 1000000000000 as avg_approximate_cpu_time_sec,
-            """
-        
+        # Use SUM_LOCK_TIME directly (always exists in MariaDB)
+        # Calculate average from SUM_LOCK_TIME / COUNT_STAR
         sql = f"""
             SELECT 
                 DIGEST_TEXT as digest_text,
                 COUNT_STAR as exec_count,
                 SUM_TIMER_WAIT / 1000000000000 as total_timer_wait_sec,
                 AVG_TIMER_WAIT / 1000000000000 as avg_timer_wait_sec,
-                {lock_time_cols}
+                SUM_LOCK_TIME / 1000000000000 as total_lock_time_sec,
+                CASE WHEN COUNT_STAR > 0 THEN SUM_LOCK_TIME / COUNT_STAR / 1000000000000 ELSE NULL END as avg_lock_time_sec,
+                (SUM_TIMER_WAIT - SUM_LOCK_TIME) / 1000000000000 as total_approximate_cpu_time_sec,
+                CASE WHEN COUNT_STAR > 0 THEN (AVG_TIMER_WAIT * COUNT_STAR - SUM_LOCK_TIME) / COUNT_STAR / 1000000000000 ELSE AVG_TIMER_WAIT / 1000000000000 END as avg_approximate_cpu_time_sec,
                 SUM_ROWS_EXAMINED as total_rows_examined,
-                AVG_ROWS_EXAMINED as avg_rows_examined,
+                CASE WHEN COUNT_STAR > 0 THEN SUM_ROWS_EXAMINED / COUNT_STAR ELSE NULL END as avg_rows_examined,
                 SUM_ROWS_SENT as total_rows_sent,
-                AVG_ROWS_SENT as avg_rows_sent,
+                CASE WHEN COUNT_STAR > 0 THEN SUM_ROWS_SENT / COUNT_STAR ELSE NULL END as avg_rows_sent,
                 SUM_ROWS_AFFECTED as total_rows_affected,
                 SUM_CREATED_TMP_TABLES as total_created_tmp_tables,
                 SUM_CREATED_TMP_DISK_TABLES as total_created_tmp_disk_tables,

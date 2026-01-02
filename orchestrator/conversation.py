@@ -121,11 +121,12 @@ class OrchestratorConversationClient:
                         max_turns=30,
                     )
 
-                    # Track observability metrics
+                    # Track observability metrics (mark as orchestrator to aggregate sub-agent metrics)
                     tracker = get_tracker()
                     metrics = tracker.track_interaction(
                         user_input=user_input,
                         result=result,
+                        is_orchestrator=True,
                     )
 
                     # Store user message in history

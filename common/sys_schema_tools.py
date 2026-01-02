@@ -394,6 +394,7 @@ def get_sys_statement_analysis(limit: int = 20) -> dict[str, Any]:
     
     try:
         # Use performance_schema.events_statements_summary_by_digest directly
+        # SUM_LOCK_TIME always exists in MariaDB
         sql = f"""
             SELECT 
                 DIGEST_TEXT AS query,

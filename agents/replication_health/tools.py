@@ -107,7 +107,13 @@ def get_all_replica_status(
     total_executions = 0
     
     # Execute multiple times with separate connections to leverage MaxScale round-robin
-    for i in range(max_executions):
+    # We need to ensure we hit the master at least once to collect replica status
+    # If we only hit replicas, we'll retry up to 2x max_executions to ensure we reach master
+    max_attempts = max_executions * 2  # Allow retries if we keep hitting replicas
+    attempts = 0
+    
+    i = 0
+    while i < max_executions and attempts < max_attempts:
         conn = None
         try:
             # Create a new connection for each execution
@@ -126,6 +132,7 @@ def get_all_replica_status(
             is_master = server_info.get('read_only') == 0 and server_info.get('log_bin') == 1
             
             total_executions += 1
+            attempts += 1
             if is_master:
                 master_hits += 1
             else:
@@ -133,10 +140,20 @@ def get_all_replica_status(
             
             if not is_master:
                 # We're connected to a replica - SHOW ALL SLAVES STATUS won't show useful info
-                # Skip this execution and try again
                 cursor.close()
                 conn.close()
-                continue
+                
+                # If we haven't hit master yet, retry this iteration (don't increment i)
+                # This handles cases where MaxScale routes all initial connections to replicas
+                # We'll keep retrying until we hit master at least once, or exhaust max_attempts
+                if master_hits == 0:
+                    # Retry this iteration - don't increment i, just continue
+                    # This ensures we keep trying until we hit master
+                    continue
+                else:
+                    # We've already hit master at least once, so it's OK to skip replicas
+                    i += 1
+                    continue
             
             # We're on the master - SHOW ALL SLAVES STATUS will show replica connections
             cursor.execute("SHOW ALL SLAVES STATUS")
@@ -162,6 +179,9 @@ def get_all_replica_status(
             
             cursor.close()
             conn.close()
+            
+            # Only increment i if we successfully processed (hit master)
+            i += 1
         
         except Exception as e:
             # Log error but continue with next execution
@@ -171,6 +191,8 @@ def get_all_replica_status(
                     conn.close()
                 except Exception:
                     pass
+            # On error, increment i to move to next iteration (don't retry on errors)
+            i += 1
             continue
     
     # Note: We don't need a finally block here since we close connections in the loop
@@ -178,8 +200,11 @@ def get_all_replica_status(
     # Detect if we're only hitting master (possible high lag scenario)
     only_master_hits = is_skysql and total_executions > 0 and master_hits == total_executions and len(seen_replicas) == 0
     
+    # Detect if we only hit replicas (couldn't reach master)
+    only_replica_hits = is_skysql and total_executions > 0 and replica_hits == total_executions and master_hits == 0
+    
     note = (
-        f"Executed SHOW ALL SLAVES STATUS {max_executions} times via MaxScale round-robin. "
+        f"Executed SHOW ALL SLAVES STATUS {total_executions} times via MaxScale round-robin (requested {max_executions}). "
         f"Only collected results when connected to master (read_only=OFF, log_bin=ON). "
         f"Found {len(seen_replicas)} unique replica connection(s) (SkySQL max: 5 replicas). "
     )
@@ -190,8 +215,18 @@ def get_all_replica_status(
             "We filter to only collect results from master connections to avoid duplicates. "
         )
         
+        # Add warning if we only hit replicas (couldn't reach master)
+        if only_replica_hits:
+            note += (
+                f"⚠️ WARNING: All {total_executions} executions were routed to replicas (master_hits=0). "
+                "Could not reach the master to collect replica status. This may indicate: "
+                "1) MaxScale is configured to route all read queries to replicas, "
+                "2) Connection routing differs when called from orchestrator context, or "
+                "3) The master is temporarily unavailable. "
+                "Try running the replication health agent directly, or check MaxScale routing configuration."
+            )
         # Add warning if we only hit master (possible high lag scenario)
-        if only_master_hits:
+        elif only_master_hits:
             note += (
                 f"⚠️ WARNING: All {total_executions} executions were routed to the master (replica_hits=0). "
                 "This may indicate HIGH REPLICATION LAG - MaxScale may be routing all traffic to the primary "

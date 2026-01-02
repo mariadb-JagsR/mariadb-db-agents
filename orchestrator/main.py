@@ -66,11 +66,12 @@ async def run_orchestrator_async(
     # Run the agent
     result = await Runner.run(agent, user_query, max_turns=max_turns)
     
-    # Track observability metrics
+    # Track observability metrics (mark as orchestrator to aggregate sub-agent metrics)
     tracker = get_tracker()
     metrics = tracker.track_interaction(
         user_input=user_query,
         result=result,
+        is_orchestrator=True,
     )
     
     return result.final_output or "No output generated."

@@ -31,10 +31,12 @@ All agents use the **OpenAI Agents SDK** to intelligently query the database and
 - **Interactive Mode**: Conversation-based interaction with agents
 - **DBA Orchestrator**: Intelligent routing to specialized agents based on user queries
 - **SkySQL Integration**: Error log access via SkySQL API
+- **SkySQL Observability**: CPU% and disk utilization metrics via SkySQL Observability API (not accessible via SQL)
 - **Error Log Analysis**: Pattern extraction and analysis from database error logs (supports local files and SkySQL API)
 - **Slow Log File Support**: Read slow query logs from local files or mysql.slow_log table
 - **Replication Monitoring**: Monitor replication lag, detect failures, and analyze replication health
 - **Database Inspector**: Execute read-only SQL queries for interactive investigation and follow-up analysis
+- **LLM Usage Telemetry**: Comprehensive tracking and aggregation of token usage across orchestrator and sub-agents
 
 ## Project Structure
 
@@ -164,8 +166,8 @@ Edit `.env` with your actual values:
 - `DB_USER`: Read-only database user
 - `DB_PASSWORD`: Database password
 - `DB_DATABASE`: Database name
-- `SKYSQL_API_KEY`: (Optional) SkySQL API key for error log access
-- `SKYSQL_SERVICE_ID`: (Optional) SkySQL service ID for error log access
+- `SKYSQL_API_KEY`: (Optional) SkySQL API key for error log access and observability metrics
+- `SKYSQL_SERVICE_ID`: (Optional) SkySQL service ID for error log access and observability metrics
 - `SKYSQL_LOG_API_URL`: (Optional) SkySQL log API URL (defaults to public API: `https://api.skysql.com/observability/v2/logs`)
 
 **Note**: Database connections are configured via environment variables (DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_DATABASE).
@@ -397,11 +399,14 @@ Agent: [Suggests specific indexes...]
 
 1. **Health Snapshot**: Gathers minimal "golden snapshot" of critical health metrics (connections, locks, resources, I/O)
 2. **Error Log Analysis**: Reads and extracts patterns from error logs (supports local files and SkySQL API)
-3. **Symptom Correlation**: Correlates symptoms into top 2-3 likely causes
-4. **Actionable Checklist**: Provides prioritized checklist of immediate checks and safe mitigations
-5. **Performance Schema Integration**: Uses `performance_schema` and `information_schema` directly for detailed metrics
+3. **SkySQL Observability**: Fetches CPU% and disk utilization metrics from SkySQL Observability API (not accessible via SQL)
+4. **Symptom Correlation**: Correlates symptoms into top 2-3 likely causes
+5. **Actionable Checklist**: Provides prioritized checklist of immediate checks and safe mitigations
+6. **Performance Schema Integration**: Uses `performance_schema` and `information_schema` directly for detailed metrics
 
 **File Support**: The agent prioritizes explicit file paths (`--error-log-path`) over SkySQL API. If a file path is provided, it reads only from that file.
+
+**SkySQL Observability**: For SkySQL services, the agent can fetch CPU% and disk utilization metrics that aren't available via SQL queries. This provides a complete picture of resource pressure.
 
 ### Replication Health Agent
 
@@ -429,6 +434,8 @@ Agent: [Suggests specific indexes...]
 3. **Multi-Agent Coordination**: Coordinates multiple agents for comprehensive analysis when needed
 4. **Result Synthesis**: Combines results from multiple agents into coherent, actionable reports
 5. **Context Management**: Maintains conversation context across agent interactions
+6. **SkySQL Observability**: Can directly access CPU% and disk utilization metrics for SkySQL services
+7. **Telemetry Aggregation**: Tracks and reports total LLM usage (tokens, round trips) across all sub-agents invoked
 
 ## Performance Schema Integration
 
@@ -441,8 +448,9 @@ See `enable_performance_schema.sql` for setup instructions.
 **Shared Components (`common/`):**
 - **`config.py`**: Manages OpenAI API, database, and SkySQL configuration
 - **`db_client.py`**: Provides read-only database operations with safety checks, error log reading, SkySQL API integration
-- **`guardrails.py`**: Implements input/output guardrails
-- **`observability.py`**: Tracks LLM usage metrics (tokens, round trips)
+- **`guardrails.py`**: Implements input/output guardrails with smart detection for examples vs. real credentials
+- **`observability.py`**: Tracks LLM usage metrics (tokens, round trips) with sub-agent aggregation for orchestrator
+- **`observability_tools.py`**: SkySQL Observability API integration for CPU% and disk utilization metrics
 - **`performance_metrics.py`**: Data structures and helper functions for Performance Schema
 - **`performance_tools.py`**: Tools for querying Performance Schema
 - **`sys_schema_tools.py`**: Tools for querying performance_schema and information_schema tables directly
@@ -482,8 +490,9 @@ The agents include built-in observability tracking for LLM usage:
 - Round trips (number of API calls)
 - Per-request breakdown
 - Context size
+- **Orchestrator Telemetry**: Aggregated metrics across all sub-agents (total tokens, round trips, breakdown by agent)
 
-Metrics are automatically logged to `.observability_log.json` and displayed in interactive mode.
+Metrics are automatically logged to `.observability_log.json` and displayed in interactive mode. When using the orchestrator, you'll see both the orchestrator's own usage and the aggregated total across all invoked agents.
 
 ## Notes
 

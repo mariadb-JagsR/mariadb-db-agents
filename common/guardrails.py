@@ -150,29 +150,75 @@ async def validate_output_guardrail(
                     output_info={"status": "Output validated - has message content"},
                 )
         
+        # Check if this is a RunResult with tool calls (agent did work, just no final output)
+        if hasattr(agent_output, "tool_calls") and agent_output.tool_calls:
+            return GuardrailFunctionOutput(
+                tripwire_triggered=False,
+                output_info={"status": "Output validated - has tool calls"},
+            )
+        
+        # Check if there are any tool calls in the context
+        if hasattr(run_context, "tool_calls") and run_context.tool_calls:
+            return GuardrailFunctionOutput(
+                tripwire_triggered=False,
+                output_info={"status": "Output validated - has tool calls in context"},
+            )
+        
+        # If we get here, it's truly empty - but be lenient for orchestrator
+        # (it might route to agents that don't produce output)
+        agent_name = getattr(agent, "name", "").lower()
+        if "orchestrator" in agent_name:
+            # Orchestrator might have empty output if it routes to agents
+            # Check if it made any tool calls (which would indicate it tried to help)
+            if hasattr(run_context, "tool_calls") or (hasattr(agent_output, "tool_calls") and agent_output.tool_calls):
+                return GuardrailFunctionOutput(
+                    tripwire_triggered=False,
+                    output_info={"status": "Output validated - orchestrator made tool calls"},
+                )
+        
         return GuardrailFunctionOutput(
             tripwire_triggered=True,
             output_info={"reason": "Empty output detected", "output_type": type(agent_output).__name__},
         )
 
     # Check for sensitive information patterns
-    sensitive_patterns = [
-        r"password\s*[:=]\s*\S+",
-        r"api[_-]?key\s*[:=]\s*\S+",
-        r"secret\s*[:=]\s*\S+",
-        r"token\s*[:=]\s*\S+",
-    ]
+    # Only trigger on actual credentials, not documentation examples with placeholders
     import re
     output_lower = output_str.lower()
-    for pattern in sensitive_patterns:
-        if re.search(pattern, output_lower):
-            return GuardrailFunctionOutput(
-                tripwire_triggered=True,
-                output_info={
-                    "reason": "Potential sensitive information detected in output",
-                    "pattern": pattern,
-                },
-            )
+    
+    # Patterns that indicate actual credentials (not examples)
+    sensitive_patterns = [
+        r"password\s*[:=]\s*[a-z0-9]{20,}",  # Long alphanumeric password (likely real)
+        r"api[_-]?key\s*[:=]\s*[a-z0-9]{20,}",  # Long API key (likely real)
+        r"secret\s*[:=]\s*[a-z0-9]{20,}",  # Long secret (likely real)
+        r"token\s*[:=]\s*[a-z0-9]{20,}",  # Long token (likely real)
+        r"skysql\.\d+\.\w+\.\w+",  # SkySQL API key format (actual key)
+    ]
+    
+    # Patterns that indicate examples/documentation (should be allowed)
+    example_indicators = [
+        r"password\s*[:=]\s*(your[_-]?password|password|pwd|placeholder|example|xxx|\.\.\.)",
+        r"api[_-]?key\s*[:=]\s*(your[_-]?api[_-]?key|api[_-]?key|key|placeholder|example|xxx|\.\.\.)",
+        r"secret\s*[:=]\s*(your[_-]?secret|secret|placeholder|example|xxx|\.\.\.)",
+        r"token\s*[:=]\s*(your[_-]?token|token|placeholder|example|xxx|\.\.\.)",
+    ]
+    
+    # Check if it's an example first (if so, allow it)
+    is_example = any(re.search(pattern, output_lower) for pattern in example_indicators)
+    if is_example:
+        # It's an example, allow it
+        pass
+    else:
+        # Check for actual credentials
+        for pattern in sensitive_patterns:
+            if re.search(pattern, output_lower):
+                return GuardrailFunctionOutput(
+                    tripwire_triggered=True,
+                    output_info={
+                        "reason": "Potential sensitive information detected in output",
+                        "pattern": pattern,
+                    },
+                )
 
     # Check for dangerous SQL execution suggestions
     dangerous_suggestions = [

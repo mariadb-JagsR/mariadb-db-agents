@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -62,6 +63,9 @@ class InteractionMetrics:
     context_size: int = 0
     """Approximate context size (input tokens)."""
 
+    sub_agent_metrics: list[dict[str, Any]] = field(default_factory=list)
+    """Metrics from sub-agents invoked during this interaction (for orchestrator)."""
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {
@@ -76,6 +80,39 @@ class InteractionMetrics:
             "reasoning_tokens": self.reasoning_tokens,
             "context_size": self.context_size,
             "per_request_usage": self.per_request_usage,
+            "sub_agent_metrics": self.sub_agent_metrics,
+        }
+    
+    def get_total_with_sub_agents(self) -> dict[str, Any]:
+        """Get total metrics including sub-agents (for orchestrator)."""
+        total_round_trips = self.llm_round_trips
+        total_input_tokens = self.total_input_tokens
+        total_output_tokens = self.total_output_tokens
+        total_tokens = self.total_tokens
+        total_cached_tokens = self.cached_tokens
+        total_reasoning_tokens = self.reasoning_tokens
+        
+        for sub_metric in self.sub_agent_metrics:
+            total_round_trips += sub_metric.get("llm_round_trips", 0)
+            total_input_tokens += sub_metric.get("total_input_tokens", 0)
+            total_output_tokens += sub_metric.get("total_output_tokens", 0)
+            total_tokens += sub_metric.get("total_tokens", 0)
+            total_cached_tokens += sub_metric.get("cached_tokens", 0)
+            total_reasoning_tokens += sub_metric.get("reasoning_tokens", 0)
+        
+        return {
+            "orchestrator_round_trips": self.llm_round_trips,
+            "orchestrator_input_tokens": self.total_input_tokens,
+            "orchestrator_output_tokens": self.total_output_tokens,
+            "orchestrator_tokens": self.total_tokens,
+            "sub_agents_count": len(self.sub_agent_metrics),
+            "total_round_trips": total_round_trips,
+            "total_input_tokens": total_input_tokens,
+            "total_output_tokens": total_output_tokens,
+            "total_tokens": total_tokens,
+            "total_cached_tokens": total_cached_tokens,
+            "total_reasoning_tokens": total_reasoning_tokens,
+            "sub_agent_breakdown": self.sub_agent_metrics,
         }
 
     def __str__(self) -> str:
@@ -130,6 +167,7 @@ class ObservabilityTracker:
         user_input: str,
         result: RunResult,
         agent_output: str | None = None,
+        is_orchestrator: bool = False,
     ) -> InteractionMetrics:
         """
         Track metrics for a single agent interaction.
@@ -138,6 +176,7 @@ class ObservabilityTracker:
             user_input: The user's input message.
             result: The RunResult from the agent execution.
             agent_output: Optional agent output (will extract from result if not provided).
+            is_orchestrator: If True, will aggregate sub-agent metrics for orchestrator.
 
         Returns:
             InteractionMetrics object with all tracked metrics.
@@ -162,6 +201,13 @@ class ObservabilityTracker:
         # Calculate context size (approximate - input tokens)
         context_size = usage.input_tokens
 
+        # Get sub-agent metrics if this is an orchestrator
+        sub_agent_metrics = []
+        if is_orchestrator:
+            sub_agent_metrics = get_orchestrator_sub_agent_metrics()
+            # Clear after retrieving (for next orchestrator run)
+            clear_orchestrator_sub_agent_metrics()
+
         metrics = InteractionMetrics(
             timestamp=datetime.now(),
             user_input=user_input,
@@ -174,6 +220,7 @@ class ObservabilityTracker:
             reasoning_tokens=usage.output_tokens_details.reasoning_tokens or 0,
             per_request_usage=per_request,
             context_size=context_size,
+            sub_agent_metrics=sub_agent_metrics,
         )
 
         self.interactions.append(metrics)
@@ -192,15 +239,37 @@ class ObservabilityTracker:
         print("\n" + "=" * 80)
         print("📊 LLM Usage Metrics")
         print("=" * 80)
-        print(f"Round trips: {metrics.llm_round_trips}")
-        print(f"Input tokens: {metrics.total_input_tokens:,}")
-        print(f"Output tokens: {metrics.total_output_tokens:,}")
-        print(f"Total tokens: {metrics.total_tokens:,}")
-        if metrics.cached_tokens > 0:
-            print(f"Cached tokens: {metrics.cached_tokens:,}")
-        if metrics.reasoning_tokens > 0:
-            print(f"Reasoning tokens: {metrics.reasoning_tokens:,}")
-        print(f"Context size: {metrics.context_size:,}")
+        
+        # Check if this is an orchestrator with sub-agents
+        if metrics.sub_agent_metrics:
+            totals = metrics.get_total_with_sub_agents()
+            print("ORCHESTRATOR (Total across all agents):")
+            print(f"  Total round trips: {totals['total_round_trips']}")
+            print(f"  Total input tokens: {totals['total_input_tokens']:,}")
+            print(f"  Total output tokens: {totals['total_output_tokens']:,}")
+            print(f"  Total tokens: {totals['total_tokens']:,}")
+            if totals['total_cached_tokens'] > 0:
+                print(f"  Total cached tokens: {totals['total_cached_tokens']:,}")
+            if totals['total_reasoning_tokens'] > 0:
+                print(f"  Total reasoning tokens: {totals['total_reasoning_tokens']:,}")
+            print()
+            print("Breakdown:")
+            print(f"  Orchestrator: {totals['orchestrator_round_trips']} round trips, {totals['orchestrator_tokens']:,} tokens")
+            print(f"  Sub-agents ({totals['sub_agents_count']}):")
+            for sub_metric in metrics.sub_agent_metrics:
+                agent_name = sub_metric.get("agent_name", "unknown")
+                print(f"    - {agent_name}: {sub_metric.get('llm_round_trips', 0)} round trips, {sub_metric.get('total_tokens', 0):,} tokens")
+        else:
+            # Regular agent (no sub-agents)
+            print(f"Round trips: {metrics.llm_round_trips}")
+            print(f"Input tokens: {metrics.total_input_tokens:,}")
+            print(f"Output tokens: {metrics.total_output_tokens:,}")
+            print(f"Total tokens: {metrics.total_tokens:,}")
+            if metrics.cached_tokens > 0:
+                print(f"Cached tokens: {metrics.cached_tokens:,}")
+            if metrics.reasoning_tokens > 0:
+                print(f"Reasoning tokens: {metrics.reasoning_tokens:,}")
+            print(f"Context size: {metrics.context_size:,}")
 
         if metrics.per_request_usage:
             print("\nPer-request breakdown:")
@@ -273,6 +342,10 @@ class ObservabilityTracker:
 # Global tracker instance (can be shared across conversations)
 _global_tracker: ObservabilityTracker | None = None
 
+# Thread-local storage for orchestrator sub-agent metrics
+_orchestrator_sub_agent_metrics: dict[int, list[dict[str, Any]]] = {}
+_orchestrator_lock = threading.Lock()
+
 
 def get_tracker() -> ObservabilityTracker:
     """Get or create the global observability tracker."""
@@ -286,4 +359,29 @@ def reset_tracker() -> None:
     """Reset the global tracker (useful for testing or new sessions)."""
     global _global_tracker
     _global_tracker = None
+
+
+def get_orchestrator_sub_agent_metrics() -> list[dict[str, Any]]:
+    """Get sub-agent metrics for the current orchestrator execution."""
+    thread_id = threading.current_thread().ident
+    with _orchestrator_lock:
+        return _orchestrator_sub_agent_metrics.get(thread_id, [])
+
+
+def add_orchestrator_sub_agent_metric(agent_name: str, metrics: dict[str, Any]) -> None:
+    """Add sub-agent metrics for the current orchestrator execution."""
+    thread_id = threading.current_thread().ident
+    with _orchestrator_lock:
+        if thread_id not in _orchestrator_sub_agent_metrics:
+            _orchestrator_sub_agent_metrics[thread_id] = []
+        metrics_with_name = {**metrics, "agent_name": agent_name}
+        _orchestrator_sub_agent_metrics[thread_id].append(metrics_with_name)
+
+
+def clear_orchestrator_sub_agent_metrics() -> None:
+    """Clear sub-agent metrics for the current orchestrator execution."""
+    thread_id = threading.current_thread().ident
+    with _orchestrator_lock:
+        if thread_id in _orchestrator_sub_agent_metrics:
+            del _orchestrator_sub_agent_metrics[thread_id]
 

@@ -29,12 +29,32 @@ async def analyze_slow_queries(
         Dictionary with 'report' (agent output) and 'agent' (agent name)
     """
     from ..agents.slow_query.main import run_agent_async
+    from ..common.observability import get_tracker, add_orchestrator_sub_agent_metric
     
     try:
+        # Track metrics before running agent
+        tracker = get_tracker()
+        interactions_before = len(tracker.interactions)
+        
         result = await run_agent_async(
             time_window_hours=hours,
             max_patterns=max_patterns,
         )
+        
+        # Capture sub-agent metrics
+        interactions_after = len(tracker.interactions)
+        if interactions_after > interactions_before:
+            # Get the last interaction (the sub-agent's metrics)
+            sub_agent_metrics = tracker.interactions[-1]
+            add_orchestrator_sub_agent_metric("slow_query", {
+                "llm_round_trips": sub_agent_metrics.llm_round_trips,
+                "total_input_tokens": sub_agent_metrics.total_input_tokens,
+                "total_output_tokens": sub_agent_metrics.total_output_tokens,
+                "total_tokens": sub_agent_metrics.total_tokens,
+                "cached_tokens": sub_agent_metrics.cached_tokens,
+                "reasoning_tokens": sub_agent_metrics.reasoning_tokens,
+            })
+        
         return {
             "report": result,
             "agent": "slow_query",
@@ -72,13 +92,33 @@ async def analyze_running_queries(
         Dictionary with 'report' (agent output) and 'agent' (agent name)
     """
     from ..agents.running_query.main import run_agent_async
+    from ..common.observability import get_tracker, add_orchestrator_sub_agent_metric
     
     try:
+        # Track metrics before running agent
+        tracker = get_tracker()
+        interactions_before = len(tracker.interactions)
+        
         result = await run_agent_async(
             min_time_seconds=min_time_seconds,
             include_sleeping=include_sleeping,
             max_queries=max_queries,
         )
+        
+        # Capture sub-agent metrics
+        interactions_after = len(tracker.interactions)
+        if interactions_after > interactions_before:
+            # Get the last interaction (the sub-agent's metrics)
+            sub_agent_metrics = tracker.interactions[-1]
+            add_orchestrator_sub_agent_metric("running_query", {
+                "llm_round_trips": sub_agent_metrics.llm_round_trips,
+                "total_input_tokens": sub_agent_metrics.total_input_tokens,
+                "total_output_tokens": sub_agent_metrics.total_output_tokens,
+                "total_tokens": sub_agent_metrics.total_tokens,
+                "cached_tokens": sub_agent_metrics.cached_tokens,
+                "reasoning_tokens": sub_agent_metrics.reasoning_tokens,
+            })
+        
         return {
             "report": result,
             "agent": "running_query",
@@ -123,8 +163,13 @@ async def perform_incident_triage(
         Dictionary with 'report' (agent output) and 'agent' (agent name)
     """
     from ..agents.incident_triage.main import run_agent_async
+    from ..common.observability import get_tracker, add_orchestrator_sub_agent_metric
     
     try:
+        # Track metrics before running agent
+        tracker = get_tracker()
+        interactions_before = len(tracker.interactions)
+        
         result = await run_agent_async(
             error_log_path=error_log_path,
             service_id=service_id,
@@ -132,6 +177,21 @@ async def perform_incident_triage(
             error_log_lines=error_log_lines,
             max_turns=max_turns,
         )
+        
+        # Capture sub-agent metrics
+        interactions_after = len(tracker.interactions)
+        if interactions_after > interactions_before:
+            # Get the last interaction (the sub-agent's metrics)
+            sub_agent_metrics = tracker.interactions[-1]
+            add_orchestrator_sub_agent_metric("incident_triage", {
+                "llm_round_trips": sub_agent_metrics.llm_round_trips,
+                "total_input_tokens": sub_agent_metrics.total_input_tokens,
+                "total_output_tokens": sub_agent_metrics.total_output_tokens,
+                "total_tokens": sub_agent_metrics.total_tokens,
+                "cached_tokens": sub_agent_metrics.cached_tokens,
+                "reasoning_tokens": sub_agent_metrics.reasoning_tokens,
+            })
+        
         return {
             "report": result,
             "agent": "incident_triage",
@@ -171,12 +231,32 @@ async def check_replication_health(
         Dictionary with 'report' (agent output) and 'agent' (agent name)
     """
     from ..agents.replication_health.main import run_agent_async
+    from ..common.observability import get_tracker, add_orchestrator_sub_agent_metric
     
     try:
+        # Track metrics before running agent
+        tracker = get_tracker()
+        interactions_before = len(tracker.interactions)
+        
         result = await run_agent_async(
             max_executions=max_executions,
             max_turns=max_turns,
         )
+        
+        # Capture sub-agent metrics
+        interactions_after = len(tracker.interactions)
+        if interactions_after > interactions_before:
+            # Get the last interaction (the sub-agent's metrics)
+            sub_agent_metrics = tracker.interactions[-1]
+            add_orchestrator_sub_agent_metric("replication_health", {
+                "llm_round_trips": sub_agent_metrics.llm_round_trips,
+                "total_input_tokens": sub_agent_metrics.total_input_tokens,
+                "total_output_tokens": sub_agent_metrics.total_output_tokens,
+                "total_tokens": sub_agent_metrics.total_tokens,
+                "cached_tokens": sub_agent_metrics.cached_tokens,
+                "reasoning_tokens": sub_agent_metrics.reasoning_tokens,
+            })
+        
         return {
             "report": result,
             "agent": "replication_health",
@@ -213,14 +293,34 @@ async def execute_database_query(
         Dictionary with 'report' (query results) and 'agent' (agent name)
     """
     from ..agents.database_inspector.main import run_agent_async
+    from ..common.observability import get_tracker, add_orchestrator_sub_agent_metric
     
     try:
+        # Track metrics before running agent
+        tracker = get_tracker()
+        interactions_before = len(tracker.interactions)
+        
         result = await run_agent_async(
             query=sql,
             max_rows=max_rows,
             timeout=timeout_seconds,
             max_turns=5,  # Inspector agent typically needs few turns
         )
+        
+        # Capture sub-agent metrics
+        interactions_after = len(tracker.interactions)
+        if interactions_after > interactions_before:
+            # Get the last interaction (the sub-agent's metrics)
+            sub_agent_metrics = tracker.interactions[-1]
+            add_orchestrator_sub_agent_metric("database_inspector", {
+                "llm_round_trips": sub_agent_metrics.llm_round_trips,
+                "total_input_tokens": sub_agent_metrics.total_input_tokens,
+                "total_output_tokens": sub_agent_metrics.total_output_tokens,
+                "total_tokens": sub_agent_metrics.total_tokens,
+                "cached_tokens": sub_agent_metrics.cached_tokens,
+                "reasoning_tokens": sub_agent_metrics.reasoning_tokens,
+            })
+        
         return {
             "report": result,
             "agent": "database_inspector",

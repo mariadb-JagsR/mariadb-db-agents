@@ -80,6 +80,9 @@ The orchestrator can route to:
 4. **Replication Health Agent** - Monitor replication lag and health
 5. **Database Inspector Agent** - Execute read-only SQL queries for investigation
 
+The orchestrator also has direct access to:
+- **SkySQL Observability Tool** - Get CPU% and disk utilization metrics (not accessible via SQL)
+
 More agents will be added as they are implemented.
 
 ## Routing Logic
@@ -138,9 +141,9 @@ Database connection is configured via environment variables:
 OpenAI API key is configured via:
 - `OPENAI_API_KEY`
 
-For SkySQL error log access:
-- `SKYSQL_API_KEY`
-- `SKYSQL_SERVICE_ID`
+For SkySQL error log access and observability metrics:
+- `SKYSQL_API_KEY` - SkySQL API key for error logs and observability API
+- `SKYSQL_SERVICE_ID` - SkySQL service ID (used for error logs and observability)
 
 ## Architecture
 
@@ -150,6 +153,30 @@ The orchestrator uses a tool-based approach:
 - Results are synthesized into comprehensive reports
 
 See `ORCHESTRATOR_PLAN.md` for detailed architecture and `ADVANCED_WORKFLOWS.md` for future enhancements.
+
+## Observability & Telemetry
+
+The orchestrator tracks and aggregates LLM usage metrics across all sub-agents:
+
+- **Total Usage**: Aggregated tokens and round trips across orchestrator + all sub-agents
+- **Breakdown**: Per-agent usage (orchestrator, slow_query, running_query, etc.)
+- **Cost Tracking**: Complete view of LLM costs for a single user prompt
+
+When you run the orchestrator, you'll see metrics like:
+```
+ORCHESTRATOR (Total across all agents):
+  Total round trips: 15
+  Total input tokens: 45,230
+  Total output tokens: 12,450
+  Total tokens: 57,680
+
+Breakdown:
+  Orchestrator: 3 round trips, 8,500 tokens
+  Sub-agents (3):
+    - slow_query: 5 round trips, 25,000 tokens
+    - incident_triage: 4 round trips, 15,000 tokens
+    - replication_health: 3 round trips, 9,180 tokens
+```
 
 ## Future Enhancements
 

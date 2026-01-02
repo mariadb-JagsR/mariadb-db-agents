@@ -7,23 +7,27 @@ The Incident Triage Agent is designed to quickly identify what's wrong with a da
 ## Features
 
 - **Health Snapshot**: Gathers a minimal "golden snapshot" of critical health metrics
-- **Performance Schema Integration**: Uses sys schema views for real-time metrics (when available)
+- **Performance Schema Integration**: Uses `performance_schema` and `information_schema` tables directly for real-time metrics (when available)
+- **SkySQL Observability**: Fetches CPU% and disk utilization metrics from SkySQL Observability API (not accessible via SQL)
 - **Symptom Correlation**: Identifies top 2-3 likely causes based on health metrics
-- **Error Log Analysis**: Reads and analyzes error logs with intelligent pattern extraction
+- **Error Log Analysis**: Reads and analyzes error logs with intelligent pattern extraction (supports local files and SkySQL API)
 - **Prioritized Checklist**: Provides immediate checks, safe mitigations, and what NOT to do
+- **Conservative Reporting**: Only reports actual problems, not normal operations
 
 ### Performance Schema Tools
 
-When Performance Schema is enabled, the agent automatically uses sys schema views for better real-time analysis:
+When Performance Schema is enabled, the agent directly queries `performance_schema` and `information_schema` tables:
 
-- **sys.metrics**: System-wide health metrics
-- **sys.innodb_lock_waits**: Current lock contention with blocking queries
-- **sys.processlist**: Enhanced process list with CPU time and lock latency
-- **sys.schema_table_lock_waits**: Table-level lock waits (metadata locks)
-- **sys.io_global_by_file_by_latency**: I/O bottlenecks by table/file
-- **sys.statement_analysis**: Most resource-intensive statements
+- **performance_schema.events_statements_summary_by_digest**: Aggregated statement statistics
+- **information_schema.innodb_lock_waits**: Current lock contention with blocking queries
+- **information_schema.processlist**: Enhanced process list with query details
+- **performance_schema.metadata_locks**: Table-level lock waits (metadata locks)
+- **performance_schema.file_io_summary_by_file**: I/O bottlenecks by table/file
+- **performance_schema.events_statements_summary_by_digest**: Most resource-intensive statements
 
 If Performance Schema is not enabled, the agent gracefully falls back to SHOW STATUS and information_schema queries.
+
+**Note**: The agent uses `performance_schema` and `information_schema` directly, not `sys` schema views, for broader compatibility.
 
 ## Error Log Access
 
@@ -33,11 +37,13 @@ The agent supports two methods for accessing error logs:
    ```bash
    mariadb-db-agents incident-triage --error-log-path /var/log/mysql/error.log
    ```
+   **Priority**: If `--error-log-path` is provided, the agent reads only from that file (not from SkySQL API).
 
-2. **SkySQL API** (for production - requires implementation):
+2. **SkySQL API** (for production):
    ```bash
-   mariadb-db-agents incident-triage --service-id <service_id>
+   mariadb-db-agents incident-triage
    ```
+   Automatically uses SkySQL API if `SKYSQL_API_KEY` and `SKYSQL_SERVICE_ID` are set in environment.
 
 ### Error Log Pattern Extraction
 
@@ -93,6 +99,8 @@ The agent gathers a minimal set of critical health indicators:
 - Temporary table usage (memory vs disk)
 - Table lock waits
 - Buffer pool statistics (hit ratio, I/O)
+- **CPU usage** (SkySQL only, via Observability API)
+- **Disk utilization** (SkySQL only, via Observability API - data and logs volumes)
 
 ### Lock & Transaction Health
 - InnoDB lock waits
@@ -135,12 +143,17 @@ The agent provides:
 The `tail_error_log_file` function in `common/db_client.py`:
 
 - **Local file access**: Implemented - reads from filesystem
-- **SkySQL API**: Stub - raises `NotImplementedError` (requires API integration)
+- **SkySQL API**: Fully implemented - fetches error logs from SkySQL Observability API
+- **Priority**: Explicit file paths take precedence over SkySQL API
 
-To implement SkySQL API access:
-1. Replace the `NotImplementedError` in `tail_error_log_file` with actual API call
-2. Use the `service_id` parameter to fetch logs from SkySQL API
-3. Return the same dictionary structure as local file access
+### SkySQL Observability Integration
+
+The agent can fetch CPU% and disk utilization metrics via `get_skysql_observability_snapshot()`:
+
+- **Automatic region detection**: Fetches deployment region from SkySQL Provisioning API
+- **Metrics provided**: CPU usage, disk volume utilization (data/logs), threads, aborted connections
+- **Threshold warnings**: Automatically flags high CPU (>85%) and disk usage (>90%)
+- **Integration**: Used in resource pressure analysis when available
 
 ### Pattern Extraction Algorithm
 
@@ -202,9 +215,9 @@ The agent suggests using other agents when deeper analysis is needed.
 
 ## Future Enhancements
 
-- Integration with SkySQL API for error log access
 - Historical trend analysis (compare current state to baseline)
 - Automated alerting based on health snapshot thresholds
 - Integration with monitoring systems (Prometheus, Grafana)
 - Agent composition (automatically call other agents for deeper analysis)
+- Historical observability metrics (currently snapshot-only)
 

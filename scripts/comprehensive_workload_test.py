@@ -85,11 +85,22 @@ class ComprehensiveWorkloadTest:
                 connect_kwargs['ssl_disabled'] = True
             
             conn = mysql.connector.connect(**connect_kwargs)
-            self.connections.append(conn)
+            # Add to tracking list (with safety limit to prevent excessive memory)
+            if len(self.connections) < 2000:  # Safety limit
+                self.connections.append(conn)
             return conn
         except MySQLError as e:
             logger.error(f"Failed to create connection: {e}")
             return None
+    
+    def remove_connection(self, conn: mysql.connector.MySQLConnection):
+        """Remove a connection from the tracking list (thread-safe)."""
+        try:
+            if conn in self.connections:
+                self.connections.remove(conn)
+        except (ValueError, AttributeError):
+            # Connection not in list or list modified - ignore
+            pass
     
     def setup_tables(self):
         """Setup all test tables needed for various scenarios."""
@@ -243,8 +254,12 @@ class ComprehensiveWorkloadTest:
             except Exception as e:
                 logger.debug(f"Lock contention worker error: {e}")
             finally:
-                if conn.is_connected():
-                    conn.close()
+                try:
+                    if conn and conn.is_connected():
+                        conn.close()
+                    self.remove_connection(conn)
+                except Exception:
+                    pass
         
         def waiting_worker(worker_id: int):
             conn = self.create_connection()
@@ -271,8 +286,12 @@ class ComprehensiveWorkloadTest:
             except Exception as e:
                 logger.debug(f"Waiting worker {worker_id} error (expected): {e}")
             finally:
-                if conn.is_connected():
-                    conn.close()
+                try:
+                    if conn and conn.is_connected():
+                        conn.close()
+                    self.remove_connection(conn)
+                except Exception:
+                    pass
         
         # Start blocking workers
         num_blockers = max(1, int(2 * self.intensity_config["threads_multiplier"]))
@@ -314,8 +333,12 @@ class ComprehensiveWorkloadTest:
             except Exception as e:
                 logger.debug(f"Long query worker {worker_id} error: {e}")
             finally:
-                if conn.is_connected():
-                    conn.close()
+                try:
+                    if conn and conn.is_connected():
+                        conn.close()
+                    self.remove_connection(conn)
+                except Exception:
+                    pass
         
         num_workers = max(2, int(3 * self.intensity_config["threads_multiplier"]))
         for i in range(num_workers):
@@ -352,8 +375,12 @@ class ComprehensiveWorkloadTest:
             except Exception as e:
                 logger.debug(f"I/O worker {worker_id} error: {e}")
             finally:
-                if conn.is_connected():
-                    conn.close()
+                try:
+                    if conn and conn.is_connected():
+                        conn.close()
+                    self.remove_connection(conn)
+                except Exception:
+                    pass
         
         num_workers = max(2, int(4 * self.intensity_config["threads_multiplier"]))
         for i in range(num_workers):
@@ -394,8 +421,12 @@ class ComprehensiveWorkloadTest:
             except Exception as e:
                 logger.debug(f"Write worker {worker_id} error: {e}")
             finally:
-                if conn.is_connected():
-                    conn.close()
+                try:
+                    if conn and conn.is_connected():
+                        conn.close()
+                    self.remove_connection(conn)
+                except Exception:
+                    pass
         
         num_workers = max(3, int(8 * self.intensity_config["threads_multiplier"]))
         for i in range(num_workers):
@@ -439,8 +470,12 @@ class ComprehensiveWorkloadTest:
             except Exception as e:
                 logger.debug(f"Memory worker {worker_id} error: {e}")
             finally:
-                if conn.is_connected():
-                    conn.close()
+                try:
+                    if conn and conn.is_connected():
+                        conn.close()
+                    self.remove_connection(conn)
+                except Exception:
+                    pass
         
         num_workers = max(2, int(3 * self.intensity_config["threads_multiplier"]))
         for i in range(num_workers):
@@ -471,8 +506,12 @@ class ComprehensiveWorkloadTest:
                     except Exception:
                         pass
                     finally:
-                        if conn.is_connected():
-                            conn.close()
+                        try:
+                            if conn and conn.is_connected():
+                                conn.close()
+                            self.remove_connection(conn)
+                        except Exception:
+                            pass
         
         num_workers = max(5, int(10 * self.intensity_config["threads_multiplier"]))
         for i in range(num_workers):
@@ -522,8 +561,12 @@ class ComprehensiveWorkloadTest:
             except Exception as e:
                 logger.debug(f"Mixed worker {worker_id} error: {e}")
             finally:
-                if conn.is_connected():
-                    conn.close()
+                try:
+                    if conn and conn.is_connected():
+                        conn.close()
+                    self.remove_connection(conn)
+                except Exception:
+                    pass
         
         num_workers = max(3, int(5 * self.intensity_config["threads_multiplier"]))
         for i in range(num_workers):
@@ -559,8 +602,12 @@ class ComprehensiveWorkloadTest:
             except Exception as e:
                 logger.debug(f"Metadata worker {worker_id} error: {e}")
             finally:
-                if conn.is_connected():
-                    conn.close()
+                try:
+                    if conn and conn.is_connected():
+                        conn.close()
+                    self.remove_connection(conn)
+                except Exception:
+                    pass
         
         num_workers = max(2, int(3 * self.intensity_config["threads_multiplier"]))
         for i in range(num_workers):
@@ -637,16 +684,25 @@ class ComprehensiveWorkloadTest:
         logger.info("Cleaning up workload test...")
         self.running = False
         
-        # Wait for threads
+        # Wait for threads to finish (with timeout)
         for thread in self.threads:
             thread.join(timeout=2)
         
-        # Close connections
-        for conn in self.connections:
+        # Close connections safely - check if already closed
+        # Use a copy of the list to avoid modification during iteration
+        connections_to_close = list(self.connections)
+        for conn in connections_to_close:
             try:
-                if conn.is_connected():
-                    conn.close()
+                # Check if connection exists and is still connected before closing
+                if conn and hasattr(conn, 'is_connected'):
+                    try:
+                        if conn.is_connected():
+                            conn.close()
+                    except Exception:
+                        # Connection might already be closed or in invalid state
+                        pass
             except Exception:
+                # Connection object might be invalid
                 pass
         
         self.connections.clear()

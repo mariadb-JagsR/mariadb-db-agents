@@ -12,6 +12,7 @@ from .tools import (
     get_sys_schema_table_lock_waits,
     get_sys_io_global_by_file_by_latency,
     get_sys_statement_analysis,
+    get_skysql_observability_snapshot,
 )
 from ...common.performance_tools import get_buffer_pool_statistics
 from ...common.guardrails import input_guardrail, output_guardrail
@@ -39,6 +40,7 @@ Use ONLY the tools provided:
 - get_sys_schema_table_lock_waits: to get table-level lock waits from performance_schema.metadata_locks
 - get_sys_io_global_by_file_by_latency: to get I/O bottlenecks from performance_schema.file_summary_by_instance
 - get_sys_statement_analysis: to get statement analysis from performance_schema.events_statements_summary_by_digest
+- get_skysql_observability_snapshot: to get CPU%, disk utilization, and system metrics from SkySQL observability API (SkySQL only, not accessible via SQL)
 - Do NOT invent data or run queries in your head; always use tools for DB data.
 
 **CRITICAL: All tools use performance_schema and information_schema directly (NOT sys schema).**
@@ -79,6 +81,11 @@ High-level behavior:
       - SHOW STATUS LIKE 'Created_tmp_disk_tables'
       - SHOW STATUS LIKE 'Table_locks_waited'
       - Use get_buffer_pool_stats() for cache hit ratio and I/O stats
+      - **For SkySQL services**: Use get_skysql_observability_snapshot() to get CPU% and disk volume utilization (not accessible via SQL)
+        * Check CPU usage (if available)
+        * Check disk utilization % for data and logs volumes
+        * Review warnings for critical thresholds (disk >70%, CPU >85%)
+        * If disk usage is high, check how much binlogs are consuming: SHOW BINARY LOGS;
    
    c) **Lock & Transaction Health:**
       - **Primary**: get_sys_innodb_lock_waits() - shows current lock waits with blocking queries, transaction IDs, and SQL statements
@@ -146,7 +153,10 @@ High-level behavior:
       - Buffer pool hit ratio < 0.90 (90% - should be >95% for healthy systems)
       - Created_tmp_disk_tables > 10% of Created_tmp_tables (significant disk spillage)
       - Table_locks_waited > 100 (many table lock waits)
-      - Likely causes: Insufficient memory, missing indexes, large sorts/joins
+      - **For SkySQL services**: Check get_skysql_observability_snapshot() for:
+        * Disk utilization > 90% (SEVERE) or > 95% (CRITICAL)
+        * CPU usage > 85% (WARN) or > 95% (CRITICAL)
+      - Likely causes: Insufficient memory, missing indexes, large sorts/joins, disk space exhaustion, CPU saturation
       - **DO NOT flag if hit ratio > 0.90 and temp disk tables < 10% - that's acceptable**
    
    e) **Error Pattern:**
@@ -335,6 +345,7 @@ def create_incident_triage_agent() -> Agent:
             get_sys_schema_table_lock_waits,
             get_sys_io_global_by_file_by_latency,
             get_sys_statement_analysis,
+            get_skysql_observability_snapshot,
         ],
         input_guardrails=[input_guardrail],
         output_guardrails=[output_guardrail],

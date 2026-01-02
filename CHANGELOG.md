@@ -102,6 +102,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **SkySQL Observability Integration**: CPU% and disk utilization metrics via SkySQL Observability API
+  - Available in Incident Triage Agent and Orchestrator
+  - Automatically fetches deployment region from SkySQL Provisioning API
+  - Provides metrics not accessible via SQL (CPU%, disk volume utilization)
+  - Integrated into health checks and resource pressure analysis
+- **Orchestrator Telemetry Aggregation**: Comprehensive LLM usage tracking across sub-agents
+  - Aggregates total tokens and round trips from orchestrator + all sub-agents
+  - Provides breakdown by agent for cost analysis
+  - Displays both aggregated totals and per-agent breakdown
+- **Guardrail Improvements**: Smarter detection of examples vs. real credentials
+  - Allows documentation-style examples with placeholders
+  - Only triggers on likely real credentials (long alphanumeric strings)
+  - More lenient handling of empty outputs when tool calls are present
+  - Special handling for orchestrator routing scenarios
+
+### Changed
+- Guardrails now distinguish between documentation examples and actual sensitive data
+- Orchestrator now tracks and reports aggregated LLM usage from all sub-agents
+- SkySQL Observability region detection now uses Provisioning API instead of hostname inference
+
 ### Planned
 - Connection Pool Agent
 - Capacity Planning Agent

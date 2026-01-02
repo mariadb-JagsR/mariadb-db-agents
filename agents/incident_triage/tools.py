@@ -13,6 +13,7 @@ from ...common.sys_schema_tools import (
     get_sys_io_global_by_file_by_latency,
     get_sys_statement_analysis,
 )
+from ...common.observability_tools import get_skysql_observability_snapshot
 
 
 @function_tool
