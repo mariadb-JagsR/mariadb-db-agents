@@ -1,180 +1,89 @@
 # MariaDB, MySQL Database Management Agents
 
-AI-powered agents using **OpenAI Agents SDK** and Python for analyzing and optimizing MariaDB databases.
+AI-powered agents that analyze, optimize, and troubleshoot MariaDB databases using natural language. Ask questions like "Is my database healthy?" or "Why are queries slow?" and get intelligent, actionable insights.
 
 ## Overview
 
-This project is a comprehensive platform for MariaDB database management with specialized AI agents for different aspects of database analysis and optimization:
+A comprehensive platform with specialized AI agents for different aspects of MariaDB database management:
 
-1. **Slow Query Agent**: Analyzes historical slow queries from slow query logs
-2. **Running Query Agent**: Analyzes currently executing SQL queries in real-time
-3. **Incident Triage Agent**: Quick health check that identifies database issues and provides actionable checklists
-4. **DBA Orchestrator**: Meta-agent that intelligently routes queries to specialized agents and synthesizes comprehensive reports
-5. **Replication Health Agent**: Monitors replication lag, detects failures, and recommends optimizations
-6. **Database Inspector Agent**: Executes read-only SQL queries for follow-up analysis and interactive investigation
-7. **More agents coming soon**: Connection pool management, capacity planning, lock & deadlock detection, and more
+- **DBA Orchestrator** - Intelligent routing to specialized agents (start here!)
+- **Slow Query Agent** - Analyzes historical slow queries and suggests optimizations
+- **Running Query Agent** - Real-time analysis of currently executing queries
+- **Incident Triage Agent** - Quick health checks and issue identification
+- **Replication Health Agent** - Monitors replication lag and detects failures
+- **Database Inspector Agent** - Execute read-only SQL queries with AI insights
 
-All agents use the **OpenAI Agents SDK** to intelligently query the database and provide actionable recommendations.
+All agents use the **OpenAI Agents SDK** to intelligently query your database and provide actionable recommendations. **100% read-only** - all operations are safe and non-destructive.
 
-### Key Features
+## Quick Start
 
-- **Multi-Agent Platform**: Extensible architecture for adding new specialized agents
-- **Built with OpenAI Agents SDK**: Uses the official `openai-agents` package with proper tool integration
-- **Guardrails**: Input and output guardrails for safety and validation
-- **Read-only Operations**: All database operations are read-only for safety
-- **Intelligent Analysis**: Automatically discovers configurations, aggregates patterns, and provides recommendations
-- **Performance Schema Integration**: Advanced performance metrics including CPU time, lock wait time, I/O statistics, and buffer pool analysis
-- **Deep Query Analysis**: Comprehensive EXPLAIN plan analysis, table/index inspection, and query rewrite suggestions
-- **Fulltext Index Detection**: Automatically detects fulltext indexes and suggests MATCH...AGAINST rewrites for LIKE queries
-- **Query Categorization**: Identifies CPU-bound, I/O-bound, and lock-bound queries for targeted optimization
-- **Unified CLI**: Single command-line interface for all agents
-- **Interactive Mode**: Conversation-based interaction with agents
-- **DBA Orchestrator**: Intelligent routing to specialized agents based on user queries
-- **SkySQL Integration**: Error log access via SkySQL API
-- **SkySQL Observability**: CPU% and disk utilization metrics via SkySQL Observability API (not accessible via SQL)
-- **Error Log Analysis**: Pattern extraction and analysis from database error logs (supports local files and SkySQL API)
-- **Slow Log File Support**: Read slow query logs from local files or mysql.slow_log table
-- **Replication Monitoring**: Monitor replication lag, detect failures, and analyze replication health
-- **Database Inspector**: Execute read-only SQL queries for interactive investigation and follow-up analysis
-- **LLM Usage Telemetry**: Comprehensive tracking and aggregation of token usage across orchestrator and sub-agents
-
-## Project Structure
-
-```
-mariadb_db_agents/
-├── agents/                      # Specialized agents
-│   ├── slow_query/              # Slow query analysis agent
-│   │   ├── agent.py             # Agent definition
-│   │   ├── tools.py             # Agent-specific tools
-│   │   ├── main.py              # CLI entry point
-│   │   └── conversation.py      # Interactive mode
-│   │
-│   ├── running_query/           # Running query analysis agent
-│   │   ├── agent.py
-│   │   ├── tools.py
-│   │   ├── main.py
-│   │   └── conversation.py
-│   │
-│   ├── incident_triage/         # Incident triage agent
-│   │   ├── agent.py
-│   │   ├── tools.py
-│   │   └── main.py
-│   │
-│   ├── replication_health/      # Replication health agent
-│   │   ├── agent.py
-│   │   ├── tools.py
-│   │   └── main.py
-│   │
-│   ├── database_inspector/      # Database inspector agent
-│   │   ├── agent.py
-│   │   ├── tools.py
-│   │   └── main.py
-│   │
-│   └── ...                      # Future agents
-│
-├── common/                      # Shared infrastructure
-│   ├── config.py                # Configuration management
-│   ├── db_client.py             # Database client
-│   ├── guardrails.py            # Safety guardrails
-│   ├── observability.py         # Metrics tracking
-│   ├── performance_metrics.py   # Performance Schema helpers
-│   └── performance_tools.py     # Performance Schema tools
-│
-├── cli/                         # Unified CLI interface
-│   └── main.py                  # Main entry point
-│
-├── orchestrator/                # DBA orchestrator agent
-│   ├── agent.py                 # Orchestrator agent definition
-│   ├── tools.py                 # Tools for invoking other agents
-│   ├── main.py                  # CLI entry point
-│   ├── conversation.py          # Interactive conversation mode
-│   ├── README.md                # Orchestrator usage guide
-│   ├── ORCHESTRATOR_PLAN.md     # Implementation plan
-│   └── ADVANCED_WORKFLOWS.md    # Advanced multi-agent workflows
-│
-├── scripts/                     # Utility scripts
-│   ├── generate_slow_queries.py
-│   └── ...
-│
-├── docs/                        # Documentation
-│   ├── HIGH_VALUE_AUTOMATION_OPPORTUNITIES.md
-│   └── ...
-│
-├── tests/                       # Test suite
-│
-├── requirements.txt             # Dependencies
-├── .env.example                 # Environment template
-├── enable_performance_schema.sql
-└── README.md
-```
-
-## Installation
-
-### Option 1: Install from Git Repository
+### 1. Install & Configure
 
 ```bash
-# Clone the repository
+# Clone and install
 git clone https://github.com/mariadb-JagsR/mariadb-db-agents.git
 cd mariadb-db-agents
-
-# Create and activate virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install in development mode
 pip install -e .
 
-# Or install dependencies directly
-pip install -r requirements.txt
-```
-
-### Option 2: Use Existing Virtual Environment
-
-If you have an existing virtual environment with dependencies:
-
-```bash
-# Activate your virtual environment
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install dependencies
-pip install -r mariadb_db_agents/requirements.txt
-```
-
-### Dependencies
-
-This will install:
-- `openai-agents` - The OpenAI Agents SDK
-- `mysql-connector-python` - MariaDB/MySQL connector
-- `python-dotenv` - Environment variable management
-- `requests` - HTTP requests for SkySQL API integration
-- `python-dateutil` - Date parsing for log analysis
-
-### 3. Configure Environment
-
-Copy `.env.example` to `.env` and fill in your credentials:
-
-```bash
-cd mariadb_db_agents
+# Configure environment
 cp .env.example .env
+# Edit .env with your database credentials and OpenAI API key
 ```
 
-Edit `.env` with your actual values:
-- `OPENAI_API_KEY`: Your OpenAI API key
-- `OPENAI_MODEL`: Model to use (default: `gpt-5.2`)
-- `DB_HOST`: MariaDB host address
-- `DB_PORT`: MariaDB port (default: 3306)
-- `DB_USER`: Read-only database user
-- `DB_PASSWORD`: Database password
-- `DB_DATABASE`: Database name
-- `SKYSQL_API_KEY`: (Optional) SkySQL API key for error log access and observability metrics
-- `SKYSQL_SERVICE_ID`: (Optional) SkySQL service ID for error log access and observability metrics
-- `SKYSQL_LOG_API_URL`: (Optional) SkySQL log API URL (defaults to public API: `https://api.skysql.com/observability/v2/logs`)
+### 2. Try It Out!
 
-**Note**: Database connections are configured via environment variables (DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_DATABASE).
+**Example 1: Interactive Mode (Recommended)**
+```bash
+python -m mariadb_db_agents.cli.main orchestrator --interactive
+```
+
+The Orchestrator is typically all you need! It intelligently routes your questions to the right specialized agents. Just ask natural language questions like:
+- "Is my database healthy?"
+- "Analyze slow queries from the last hour"
+- "What queries are running right now?"
+
+**Example 2: One-Shot Queries**
+```bash
+# Health check
+python -m mariadb_db_agents.cli.main orchestrator "Is my database healthy?"
+### NOTE: this will take more than a minute to respond as it engages several Agents and makes many turns with the LLM. 
+
+# Analyze slow queries
+python -m mariadb_db_agents.cli.main orchestrator "Analyze slow queries from the last hour"
+```
+
+### 3. Use in Your IDE (Cursor/Windsurf)
+
+Configure the MCP server in your IDE and use agents directly in chat:
+
+1. Open Cursor Settings → **Tools & MCP**
+2. Add the MCP server configuration (see [MCP Setup Guide](docs/MCP_SETUP.md))
+3. Ask questions in Cursor chat: "What queries are running right now?"
+
+See [MCP Setup Guide](docs/MCP_SETUP.md) for detailed instructions.
+
+---
 
 ## Usage
 
-### Unified CLI (Recommended)
+### IDE Integration (Recommended for Developers)
+
+The agents are available as an **MCP (Model Context Protocol) server** for use directly in your IDE!
+
+**Quick Setup:**
+1. Install dependencies: `pip install -r requirements.txt`
+2. Configure your IDE (see [MCP Setup Guide](docs/MCP_SETUP.md))
+3. Start using agents in your IDE's chat interface!
+
+**Example queries in IDE:**
+- "Is my database healthy?"
+- "Analyze slow queries from the last hour"
+- "What queries are running right now?"
+- "Check replication health"
+
+See [MCP Setup Guide](docs/MCP_SETUP.md) for detailed configuration instructions, or [MCP Server README](mcp_server/README.md) for full documentation.
+
+### Unified CLI (Recommended for Scripts/Automation)
 
 Use the unified CLI to access all agents:
 
@@ -182,17 +91,11 @@ Use the unified CLI to access all agents:
 # Analyze slow queries
 python -m mariadb_db_agents.cli.main slow-query --hours 1 --max-patterns 5
 
-# Analyze slow queries from a log file
-python -m mariadb_db_agents.cli.main slow-query --slow-log-path /var/log/mysql/slow.log
-
 # Analyze running queries
 python -m mariadb_db_agents.cli.main running-query --min-time-seconds 5.0
 
 # Perform incident triage
 python -m mariadb_db_agents.cli.main incident-triage
-
-# Perform incident triage with error log file
-python -m mariadb_db_agents.cli.main incident-triage --error-log-path /var/log/mysql/error.log
 
 # Check replication health
 python -m mariadb_db_agents.cli.main replication-health
@@ -203,11 +106,6 @@ python -m mariadb_db_agents.cli.main inspector "SELECT * FROM information_schema
 # Use orchestrator (intelligent routing to specialized agents)
 python -m mariadb_db_agents.cli.main orchestrator "Is my database healthy?"
 python -m mariadb_db_agents.cli.main orchestrator "Analyze slow queries from the last hour"
-python -m mariadb_db_agents.cli.main orchestrator --interactive
-
-# Interactive conversation mode
-python -m mariadb_db_agents.cli.main slow-query --interactive
-python -m mariadb_db_agents.cli.main running-query --interactive
 python -m mariadb_db_agents.cli.main orchestrator --interactive
 ```
 
@@ -230,8 +128,6 @@ python -m mariadb_db_agents.agents.slow_query.conversation
 - `--max-patterns` (optional, default: 8): Maximum number of query patterns to deep-analyze
 - `--slow-log-path` (optional): Path to slow query log file. If provided, reads from file instead of mysql.slow_log table
 
-**Note**: Database connection is configured via environment variables (DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_DATABASE). The agent prefers reading from mysql.slow_log table, but can read from a local file if `--slow-log-path` is provided.
-
 #### Running Query Agent
 
 ```bash
@@ -246,8 +142,6 @@ python -m mariadb_db_agents.agents.running_query.conversation
 - `--min-time-seconds` (optional, default: 1.0): Minimum query execution time in seconds to analyze
 - `--include-sleeping` (optional): Include sleeping/idle connections in the analysis
 - `--max-queries` (optional, default: 20): Maximum number of queries to analyze in detail
-
-**Note**: Database connection is configured via environment variables (DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_DATABASE).
 
 #### Incident Triage Agent
 
@@ -362,6 +256,94 @@ You: What index would help optimize it?
 Agent: [Suggests specific indexes...]
 ```
 
+## Installation
+
+### Option 1: Install from Git Repository
+
+```bash
+# Clone the repository
+git clone https://github.com/mariadb-JagsR/mariadb-db-agents.git
+cd mariadb-db-agents
+
+# Create and activate virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install in development mode
+pip install -e .
+
+# Or install dependencies directly
+pip install -r requirements.txt
+```
+
+### Option 2: Use Existing Virtual Environment
+
+If you have an existing virtual environment with dependencies:
+
+```bash
+# Activate your virtual environment
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install dependencies
+pip install -r mariadb_db_agents/requirements.txt
+```
+
+### Dependencies
+
+This will install:
+- `openai-agents` - The OpenAI Agents SDK
+- `mysql-connector-python` - MariaDB/MySQL connector
+- `python-dotenv` - Environment variable management
+- `mcp` - MCP SDK for IDE integration
+- `requests` - HTTP requests for SkySQL API integration
+- `python-dateutil` - Date parsing for log analysis
+
+### Configure Environment
+
+Copy `.env.example` to `.env` and fill in your credentials:
+
+```bash
+cd mariadb_db_agents
+cp .env.example .env
+```
+
+Edit `.env` with your actual values:
+- `OPENAI_API_KEY`: Your OpenAI API key
+- `OPENAI_MODEL`: Model to use (default: `gpt-4o`)
+- `DB_HOST`: MariaDB host address
+- `DB_PORT`: MariaDB port (default: 3306)
+- `DB_USER`: Read-only database user
+- `DB_PASSWORD`: Database password
+- `DB_DATABASE`: Database name
+- `SKYSQL_API_KEY`: (Optional) SkySQL API key for error log access and observability metrics
+- `SKYSQL_SERVICE_ID`: (Optional) SkySQL service ID for error log access and observability metrics
+- `SKYSQL_LOG_API_URL`: (Optional) SkySQL log API URL (defaults to public API: `https://api.skysql.com/observability/v2/logs`)
+
+**Note**: Database connections are configured via environment variables (DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_DATABASE).
+
+## Key Features
+
+- **Multi-Agent Platform**: Extensible architecture for adding new specialized agents
+- **Built with OpenAI Agents SDK**: Uses the official `openai-agents` package with proper tool integration
+- **Guardrails**: Input and output guardrails for safety and validation
+- **Read-only Operations**: All database operations are read-only for safety
+- **Intelligent Analysis**: Automatically discovers configurations, aggregates patterns, and provides recommendations
+- **Performance Schema Integration**: Advanced performance metrics including CPU time, lock wait time, I/O statistics, and buffer pool analysis
+- **Deep Query Analysis**: Comprehensive EXPLAIN plan analysis, table/index inspection, and query rewrite suggestions
+- **Fulltext Index Detection**: Automatically detects fulltext indexes and suggests MATCH...AGAINST rewrites for LIKE queries
+- **Query Categorization**: Identifies CPU-bound, I/O-bound, and lock-bound queries for targeted optimization
+- **Unified CLI**: Single command-line interface for all agents
+- **Interactive Mode**: Conversation-based interaction with agents
+- **DBA Orchestrator**: Intelligent routing to specialized agents based on user queries
+- **IDE Integration**: MCP server for Cursor, Windsurf, and other MCP-compatible IDEs - use agents directly in your IDE chat
+- **SkySQL Integration**: Error log access via SkySQL API
+- **SkySQL Observability**: CPU% and disk utilization metrics via SkySQL Observability API (not accessible via SQL)
+- **Error Log Analysis**: Pattern extraction and analysis from database error logs (supports local files and SkySQL API)
+- **Slow Log File Support**: Read slow query logs from local files or mysql.slow_log table
+- **Replication Monitoring**: Monitor replication lag, detect failures, and analyze replication health
+- **Database Inspector**: Execute read-only SQL queries for interactive investigation and follow-up analysis
+- **LLM Usage Telemetry**: Comprehensive tracking and aggregation of token usage across orchestrator and sub-agents
+
 ## Differences Between Agents
 
 | Aspect | Slow Query Agent | Running Query Agent | Incident Triage Agent | Replication Health | Database Inspector | Orchestrator |
@@ -436,6 +418,82 @@ Agent: [Suggests specific indexes...]
 5. **Context Management**: Maintains conversation context across agent interactions
 6. **SkySQL Observability**: Can directly access CPU% and disk utilization metrics for SkySQL services
 7. **Telemetry Aggregation**: Tracks and reports total LLM usage (tokens, round trips) across all sub-agents invoked
+
+## Project Structure
+
+```
+mariadb_db_agents/
+├── agents/                      # Specialized agents
+│   ├── slow_query/              # Slow query analysis agent
+│   │   ├── agent.py             # Agent definition
+│   │   ├── tools.py             # Agent-specific tools
+│   │   ├── main.py              # CLI entry point
+│   │   └── conversation.py      # Interactive mode
+│   │
+│   ├── running_query/           # Running query analysis agent
+│   │   ├── agent.py
+│   │   ├── tools.py
+│   │   ├── main.py
+│   │   └── conversation.py
+│   │
+│   ├── incident_triage/         # Incident triage agent
+│   │   ├── agent.py
+│   │   ├── tools.py
+│   │   └── main.py
+│   │
+│   ├── replication_health/      # Replication health agent
+│   │   ├── agent.py
+│   │   ├── tools.py
+│   │   └── main.py
+│   │
+│   ├── database_inspector/      # Database inspector agent
+│   │   ├── agent.py
+│   │   ├── tools.py
+│   │   └── main.py
+│   │
+│   └── ...                      # Future agents
+│
+├── common/                      # Shared infrastructure
+│   ├── config.py                # Configuration management
+│   ├── db_client.py             # Database client
+│   ├── guardrails.py            # Safety guardrails
+│   ├── observability.py         # Metrics tracking
+│   ├── performance_metrics.py   # Performance Schema helpers
+│   └── performance_tools.py     # Performance Schema tools
+│
+├── cli/                         # Unified CLI interface
+│   └── main.py                  # Main entry point
+│
+├── orchestrator/                # DBA orchestrator agent
+│   ├── agent.py                 # Orchestrator agent definition
+│   ├── tools.py                 # Tools for invoking other agents
+│   ├── main.py                  # CLI entry point
+│   ├── conversation.py          # Interactive conversation mode
+│   ├── README.md                # Orchestrator usage guide
+│   ├── ORCHESTRATOR_PLAN.md     # Implementation plan
+│   └── ADVANCED_WORKFLOWS.md    # Advanced multi-agent workflows
+│
+├── mcp_server/                  # MCP server for IDE integration
+│   ├── __init__.py
+│   ├── main.py                  # MCP server entry point
+│   ├── tools.py                 # Tool implementations
+│   └── README.md                # MCP server documentation
+│
+├── scripts/                     # Utility scripts
+│   ├── generate_slow_queries.py
+│   └── ...
+│
+├── docs/                        # Documentation
+│   ├── HIGH_VALUE_AUTOMATION_OPPORTUNITIES.md
+│   └── ...
+│
+├── tests/                       # Test suite
+│
+├── requirements.txt             # Dependencies
+├── .env.example                 # Environment template
+├── enable_performance_schema.sql
+└── README.md
+```
 
 ## Performance Schema Integration
 
@@ -512,4 +570,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Issues**: Report bugs or request features on [GitHub Issues](https://github.com/mariadb-JagsR/mariadb-db-agents/issues)
 - **Documentation**: See `docs/` directory for detailed documentation
 - **Contributing**: See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines
-
