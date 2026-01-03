@@ -1,4 +1,4 @@
-# MariaDB Database Management Agents
+# MariaDB, MySQL Database Management Agents
 
 AI-powered agents using **OpenAI Agents SDK** and Python for analyzing and optimizing MariaDB databases.
 
