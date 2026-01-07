@@ -42,6 +42,8 @@ The Orchestrator is typically all you need! It intelligently routes your questio
 - "Analyze slow queries from the last hour"
 - "What queries are running right now?"
 
+**Need inspiration?** See [Sample DBA Questions](docs/SAMPLE_DBA_QUESTIONS.md) for complex root cause analysis scenarios and multi-part investigations.
+
 **Example 2: One-Shot Queries**
 ```bash
 # Health check

@@ -34,7 +34,9 @@ python -m mariadb_db_agents.cli.main orchestrator
 python -m mariadb_db_agents.orchestrator.main "What queries are running right now?"
 ```
 
-## Examples
+## Example Questions
+
+**Need more examples?** See [Sample DBA Questions](../../docs/SAMPLE_DBA_QUESTIONS.md) for comprehensive examples including complex root cause analysis scenarios.
 
 ### Example 1: Health Check
 
