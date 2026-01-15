@@ -66,6 +66,20 @@ See [MCP Setup Guide](docs/MCP_SETUP.md) for detailed instructions.
 
 ---
 
+## Architecture
+
+![DBA Agent Architecture](docs/DBA_Agent_architecture1.png)
+
+**Key Highlights:**
+- **Orchestrator** routes queries to specialized agents and synthesizes results
+- **All agents** apply input/output guardrails for safety
+- **Common infrastructure** provides read-only DB access, observability, and performance tooling
+- **External systems** include MariaDB, SkySQL Observability API, and OpenAI API
+
+See [Architecture Diagram](docs/ARCHITECTURE_DIAGRAM.md) for more detail.
+
+---
+
 ## Usage
 
 ### IDE Integration (Recommended for Developers)
