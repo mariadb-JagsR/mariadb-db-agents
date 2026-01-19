@@ -56,6 +56,12 @@ For more information about a specific agent, use:
         help="Agent to run",
         metavar="AGENT",
     )
+    # Allow passing --interactive before the subcommand (treats orchestrator as default)
+    parser.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Start interactive conversation mode (can be used before subcommand).",
+    )
     # Default to the orchestrator agent and interactive mode when no subcommand is provided
     parser.set_defaults(agent="orchestrator", interactive=True)
 
@@ -261,12 +267,27 @@ def main() -> int:
         # _name_parser_map contains the mapping of subcommand names
         known_agents = set(subparsers_action._name_parser_map.keys())
 
+    # Remember original argv (excluding program) so we can detect if the user
+    # explicitly passed `--interactive` before we may mutate `sys.argv`.
+    original_argv = sys.argv[1:]
+
     inserted_orchestrator = False
-    if len(sys.argv) > 1:
-        first = sys.argv[1]
-        if not first.startswith("-") and first not in known_agents:
-            # Treat a bare first argument as an orchestrator query (one-shot).
-            sys.argv.insert(1, "orchestrator")
+    # Only auto-insert 'orchestrator' if the original argv did not already
+    # contain any known agent name. This prevents double-insertion when the
+    # user already specified 'orchestrator'. Find the first non-option token
+    # and insert before it so `--interactive "hello"` or `"hello"` work.
+    inserted_orchestrator = False
+    agent_in_original = any(tok in known_agents for tok in original_argv)
+    if not agent_in_original:
+        first_nonopt_index = None
+        for i, tok in enumerate(original_argv):
+            if not tok.startswith("-"):
+                first_nonopt_index = i
+                break
+
+        if first_nonopt_index is not None:
+            # Insert into sys.argv at position 1 + index (account for program name)
+            sys.argv.insert(1 + first_nonopt_index, "orchestrator")
             inserted_orchestrator = True
 
     args = parser.parse_args()
@@ -274,11 +295,13 @@ def main() -> int:
     # If we auto-inserted the orchestrator because the first arg was a query string,
     # disable interactive mode so the query is treated as a one-time request.
     if inserted_orchestrator:
-        # Some subparsers may not define 'interactive'; set attribute defensively.
+        # If the user explicitly passed `--interactive` in the original argv,
+        # honor it; otherwise disable interactive so the query is treated as
+        # a one-shot by default.
         try:
-            args.interactive = False
+            args.interactive = True if "--interactive" in original_argv else False
         except Exception:
-            setattr(args, "interactive", False)
+            setattr(args, "interactive", True if "--interactive" in original_argv else False)
 
     # If the user explicitly invoked `orchestrator` with a positional query and did
     # not pass `--interactive`, treat it as a one-shot (disable interactive).
