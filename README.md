@@ -23,6 +23,12 @@ All agents use the **OpenAI Agents SDK** to intelligently query your database an
 # Clone and install
 git clone https://github.com/mariadb-JagsR/mariadb-db-agents.git
 cd mariadb-db-agents
+
+# Create and activate virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install in development mode
 pip install -e .
 
 # Configure environment
@@ -52,6 +58,17 @@ python -m mariadb_db_agents.cli.main orchestrator "Is my database healthy?"
 
 # Analyze slow queries
 python -m mariadb_db_agents.cli.main orchestrator "Analyze slow queries from the last hour"
+```
+
+**NOTE: A helper command is available**
+```bash
+# Instead of this command
+python -m mariadb_db_agents.cli.main orchestrator "Is my database healthy?"
+
+# You can simply run:
+./mariadb-db-agents "Is my database healthy?"
+### NOTE: This will default to the orchestrator agent
+
 ```
 
 ### 3. Use in Your IDE (Cursor/Windsurf)

@@ -57,8 +57,13 @@ class OrchestratorConversationClient:
         print("=" * 80)
         print()
 
-    async def run_conversation(self):
-        """Run the interactive conversation loop."""
+    async def run_conversation(self, initial_query: str | None = None):
+        """Run the interactive conversation loop.
+
+        Args:
+            initial_query: Optional initial user message to process before entering the
+                interactive loop.
+        """
         if not self.agent:
             await self.initialize()
 
@@ -69,6 +74,50 @@ class OrchestratorConversationClient:
             "What would you like to know?"
         )
         print(f"Orchestrator: {initial_message}\n")
+
+        # If an initial message was provided (from CLI), process it first
+        if initial_query is not None:
+            user_input = initial_query.strip()
+
+            # Handle special commands
+            if user_input.lower() in ['quit', 'exit', 'q']:
+                print("\nGoodbye! Ending conversation.")
+                return
+
+            if user_input:
+                print(f"You: {user_input}\n")
+                try:
+                    messages = []
+                    for item in self.conversation_history:
+                        messages.append(item)
+                    messages.append({"role": "user", "content": user_input})
+
+                    result = await Runner.run(
+                        self.agent,
+                        messages if len(messages) > 1 else user_input,
+                        max_turns=30,
+                    )
+
+                    tracker = get_tracker()
+                    tracker.track_interaction(
+                        user_input=user_input,
+                        result=result,
+                        is_orchestrator=True,
+                    )
+
+                    # Store in history
+                    self.conversation_history.append({"role": "user", "content": user_input})
+                    if result.final_output:
+                        print("Orchestrator:", result.final_output)
+                        self.conversation_history.append({"role": "assistant", "content": result.final_output})
+                    else:
+                        print("Orchestrator: (No response generated)")
+
+                    print()
+
+                except Exception as e:
+                    print(f"Error: {e}")
+                    logging.error(f"Error in conversation initial message: {e}", exc_info=True)
 
         while True:
             try:
@@ -177,10 +226,15 @@ class OrchestratorConversationClient:
         print("=" * 80 + "\n")
 
 
-async def main() -> int:
-    """Main entry point for the conversation client."""
+async def main(initial_query: str | None = None) -> int:
+    """Main entry point for the conversation client.
+
+    Args:
+        initial_query: Optional initial user query to send as the first conversation
+            message before entering interactive loop.
+    """
     client = OrchestratorConversationClient()
-    await client.run_conversation()
+    await client.run_conversation(initial_query)
     return 0
 
 

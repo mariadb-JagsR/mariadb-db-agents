@@ -56,6 +56,14 @@ For more information about a specific agent, use:
         help="Agent to run",
         metavar="AGENT",
     )
+    # Allow passing --interactive before the subcommand (treats orchestrator as default)
+    parser.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Start interactive conversation mode (can be used before subcommand).",
+    )
+    # Default to the orchestrator agent and interactive mode when no subcommand is provided
+    parser.set_defaults(agent="orchestrator", interactive=True)
 
     # Slow Query Agent
     slow_query_parser = subparsers.add_parser(
@@ -181,7 +189,8 @@ For more information about a specific agent, use:
     orchestrator_parser.add_argument(
         "--interactive",
         action="store_true",
-        help="Start interactive conversation mode instead of one-time analysis.",
+        default=True,
+        help="Start interactive conversation mode instead of one-time analysis (default: True).",
     )
 
     # Replication Health Agent
@@ -247,7 +256,61 @@ For more information about a specific agent, use:
 def main() -> int:
     """Main entry point for the unified CLI."""
     parser = create_parser()
+    # If the user provided a bare query (e.g. `mariadb-db-agents "hello"`),
+    # treat it as an orchestrator query by inserting the subcommand before parsing.
+    subparsers_action = next(
+        (a for a in parser._actions if isinstance(a, argparse._SubParsersAction)),
+        None,
+    )
+    known_agents = set()
+    if subparsers_action is not None:
+        # _name_parser_map contains the mapping of subcommand names
+        known_agents = set(subparsers_action._name_parser_map.keys())
+
+    # Remember original argv (excluding program) so we can detect if the user
+    # explicitly passed `--interactive` before we may mutate `sys.argv`.
+    original_argv = sys.argv[1:]
+
+    inserted_orchestrator = False
+    # Only auto-insert 'orchestrator' if the original argv did not already
+    # contain any known agent name. This prevents double-insertion when the
+    # user already specified 'orchestrator'. Find the first non-option token
+    # and insert before it so `--interactive "hello"` or `"hello"` work.
+    inserted_orchestrator = False
+    agent_in_original = any(tok in known_agents for tok in original_argv)
+    if not agent_in_original:
+        first_nonopt_index = None
+        for i, tok in enumerate(original_argv):
+            if not tok.startswith("-"):
+                first_nonopt_index = i
+                break
+
+        if first_nonopt_index is not None:
+            # Insert into sys.argv at position 1 + index (account for program name)
+            sys.argv.insert(1 + first_nonopt_index, "orchestrator")
+            inserted_orchestrator = True
+
     args = parser.parse_args()
+
+    # If we auto-inserted the orchestrator because the first arg was a query string,
+    # disable interactive mode so the query is treated as a one-time request.
+    if inserted_orchestrator:
+        # If the user explicitly passed `--interactive` in the original argv,
+        # honor it; otherwise disable interactive so the query is treated as
+        # a one-shot by default.
+        try:
+            args.interactive = True if "--interactive" in original_argv else False
+        except Exception:
+            setattr(args, "interactive", True if "--interactive" in original_argv else False)
+
+    # If the user explicitly invoked `orchestrator` with a positional query and did
+    # not pass `--interactive`, treat it as a one-shot (disable interactive).
+    if getattr(args, "agent", None) == "orchestrator" and getattr(args, "query", None):
+        if "--interactive" not in sys.argv:
+            try:
+                args.interactive = False
+            except Exception:
+                setattr(args, "interactive", False)
 
     if not args.agent:
         parser.print_help()
@@ -307,10 +370,11 @@ def main() -> int:
 
     elif args.agent == "orchestrator":
         if args.interactive:
-            # Import and run conversation mode
+            # Import and run conversation mode; pass positional query as initial
+            # message if present so it becomes the first conversation item.
             import asyncio
             from mariadb_db_agents.orchestrator.conversation import main as conversation_main
-            return asyncio.run(conversation_main())
+            return asyncio.run(conversation_main(args.query if hasattr(args, 'query') else None))
         else:
             # Import and run CLI mode
             from mariadb_db_agents.orchestrator.main import main as orchestrator_main
