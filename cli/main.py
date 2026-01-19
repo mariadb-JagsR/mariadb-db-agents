@@ -347,10 +347,11 @@ def main() -> int:
 
     elif args.agent == "orchestrator":
         if args.interactive:
-            # Import and run conversation mode
+            # Import and run conversation mode; pass positional query as initial
+            # message if present so it becomes the first conversation item.
             import asyncio
             from mariadb_db_agents.orchestrator.conversation import main as conversation_main
-            return asyncio.run(conversation_main())
+            return asyncio.run(conversation_main(args.query if hasattr(args, 'query') else None))
         else:
             # Import and run CLI mode
             from mariadb_db_agents.orchestrator.main import main as orchestrator_main
