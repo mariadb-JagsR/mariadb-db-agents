@@ -23,6 +23,12 @@ All agents use the **OpenAI Agents SDK** to intelligently query your database an
 # Clone and install
 git clone https://github.com/mariadb-JagsR/mariadb-db-agents.git
 cd mariadb-db-agents
+
+# Create and activate virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install in development mode
 pip install -e .
 
 # Configure environment
