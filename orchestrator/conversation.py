@@ -78,6 +78,12 @@ class OrchestratorConversationClient:
         # If an initial message was provided (from CLI), process it first
         if initial_query is not None:
             user_input = initial_query.strip()
+
+            # Handle special commands
+            if user_input.lower() in ['quit', 'exit', 'q']:
+                print("\nGoodbye! Ending conversation.")
+                return
+
             if user_input:
                 print(f"You: {user_input}\n")
                 try:
