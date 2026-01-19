@@ -60,6 +60,17 @@ python -m mariadb_db_agents.cli.main orchestrator "Is my database healthy?"
 python -m mariadb_db_agents.cli.main orchestrator "Analyze slow queries from the last hour"
 ```
 
+**NOTE: A helper command is available**
+```bash
+# Instead of this command
+python -m mariadb_db_agents.cli.main orchestrator "Is my database healthy?"
+
+# You can simply run:
+./mariadb-db-agents "Is my database healthy?"
+### NOTE: This will default to the orchestrator agent
+
+```
+
 ### 3. Use in Your IDE (Cursor/Windsurf)
 
 Configure the MCP server in your IDE and use agents directly in chat:
