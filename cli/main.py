@@ -56,6 +56,8 @@ For more information about a specific agent, use:
         help="Agent to run",
         metavar="AGENT",
     )
+    # Default to the orchestrator agent and interactive mode when no subcommand is provided
+    parser.set_defaults(agent="orchestrator", interactive=True)
 
     # Slow Query Agent
     slow_query_parser = subparsers.add_parser(
@@ -181,7 +183,8 @@ For more information about a specific agent, use:
     orchestrator_parser.add_argument(
         "--interactive",
         action="store_true",
-        help="Start interactive conversation mode instead of one-time analysis.",
+        default=True,
+        help="Start interactive conversation mode instead of one-time analysis (default: True).",
     )
 
     # Replication Health Agent
@@ -247,7 +250,44 @@ For more information about a specific agent, use:
 def main() -> int:
     """Main entry point for the unified CLI."""
     parser = create_parser()
+    # If the user provided a bare query (e.g. `mariadb-db-agents "hello"`),
+    # treat it as an orchestrator query by inserting the subcommand before parsing.
+    subparsers_action = next(
+        (a for a in parser._actions if isinstance(a, argparse._SubParsersAction)),
+        None,
+    )
+    known_agents = set()
+    if subparsers_action is not None:
+        # _name_parser_map contains the mapping of subcommand names
+        known_agents = set(subparsers_action._name_parser_map.keys())
+
+    inserted_orchestrator = False
+    if len(sys.argv) > 1:
+        first = sys.argv[1]
+        if not first.startswith("-") and first not in known_agents:
+            # Treat a bare first argument as an orchestrator query (one-shot).
+            sys.argv.insert(1, "orchestrator")
+            inserted_orchestrator = True
+
     args = parser.parse_args()
+
+    # If we auto-inserted the orchestrator because the first arg was a query string,
+    # disable interactive mode so the query is treated as a one-time request.
+    if inserted_orchestrator:
+        # Some subparsers may not define 'interactive'; set attribute defensively.
+        try:
+            args.interactive = False
+        except Exception:
+            setattr(args, "interactive", False)
+
+    # If the user explicitly invoked `orchestrator` with a positional query and did
+    # not pass `--interactive`, treat it as a one-shot (disable interactive).
+    if getattr(args, "agent", None) == "orchestrator" and getattr(args, "query", None):
+        if "--interactive" not in sys.argv:
+            try:
+                args.interactive = False
+            except Exception:
+                setattr(args, "interactive", False)
 
     if not args.agent:
         parser.print_help()
