@@ -42,11 +42,19 @@ The Orchestrator is typically all you need! It intelligently routes your questio
 - "Analyze slow queries from the last hour"
 - "What queries are running right now?"
 
+**Tip:** You can pass `--interactive` before the agent name too:
+```bash
+python -m mariadb_db_agents.cli.main --interactive orchestrator
+```
+
 **Need inspiration?** See [Sample DBA Questions](docs/SAMPLE_DBA_QUESTIONS.md) for complex root cause analysis scenarios and multi-part investigations.
 
 **Example 2: One-Shot Queries**
 ```bash
 # Health check
+python -m mariadb_db_agents.cli.main "Is my database healthy?"
+
+# Same thing with explicit agent
 python -m mariadb_db_agents.cli.main orchestrator "Is my database healthy?"
 ### NOTE: this will take more than a minute to respond as it engages several Agents and makes many turns with the LLM. 
 

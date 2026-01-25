@@ -247,7 +247,38 @@ For more information about a specific agent, use:
 def main() -> int:
     """Main entry point for the unified CLI."""
     parser = create_parser()
-    args = parser.parse_args()
+    original_argv = sys.argv[1:]
+    global_interactive = "--interactive" in original_argv
+    cleaned_argv = [arg for arg in original_argv if arg != "--interactive"]
+
+    # Detect subcommands so we can auto-insert 'orchestrator' for bare queries.
+    subparsers_action = next(
+        (action for action in parser._actions if isinstance(action, argparse._SubParsersAction)),
+        None,
+    )
+    known_agents = set()
+    if subparsers_action is not None:
+        known_agents = set(subparsers_action._name_parser_map.keys())
+
+    agent_in_argv = any(token in known_agents for token in cleaned_argv)
+    has_positional = any(not token.startswith("-") for token in cleaned_argv)
+    inserted_orchestrator = False
+    if not agent_in_argv and has_positional:
+        cleaned_argv.insert(0, "orchestrator")
+        inserted_orchestrator = True
+
+    args = parser.parse_args(cleaned_argv)
+
+    # Apply the global --interactive flag (if provided before subcommand).
+    if global_interactive and not hasattr(args, "interactive"):
+        parser.error("unrecognized arguments: --interactive")
+    if global_interactive and hasattr(args, "interactive"):
+        args.interactive = True
+
+    # If we auto-inserted orchestrator for a bare query, default to one-shot unless
+    # the user explicitly requested interactive mode.
+    if inserted_orchestrator and hasattr(args, "interactive"):
+        args.interactive = True if global_interactive else False
 
     if not args.agent:
         parser.print_help()
@@ -307,10 +338,12 @@ def main() -> int:
 
     elif args.agent == "orchestrator":
         if args.interactive:
-            # Import and run conversation mode
+            # Import and run conversation mode; pass positional query as initial
+            # message if present so it becomes the first conversation item.
             import asyncio
             from mariadb_db_agents.orchestrator.conversation import main as conversation_main
-            return asyncio.run(conversation_main())
+            initial_query = args.query if hasattr(args, "query") else None
+            return asyncio.run(conversation_main(initial_query))
         else:
             # Import and run CLI mode
             from mariadb_db_agents.orchestrator.main import main as orchestrator_main

@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
-from typing import List
+from typing import List, Optional
 
 from agents import Runner, set_default_openai_key
 from ..common.config import OpenAIConfig
@@ -57,8 +57,13 @@ class OrchestratorConversationClient:
         print("=" * 80)
         print()
 
-    async def run_conversation(self):
-        """Run the interactive conversation loop."""
+    async def run_conversation(self, initial_query: Optional[str] = None):
+        """Run the interactive conversation loop.
+
+        Args:
+            initial_query: Optional initial user message to process before entering the
+                interactive loop.
+        """
         if not self.agent:
             await self.initialize()
 
@@ -69,6 +74,15 @@ class OrchestratorConversationClient:
             "What would you like to know?"
         )
         print(f"Orchestrator: {initial_message}\n")
+
+        if initial_query is not None:
+            user_input = initial_query.strip()
+            if user_input.lower() in ['quit', 'exit', 'q']:
+                print("\nGoodbye! Ending conversation.")
+                return
+            if user_input:
+                print(f"You: {user_input}\n")
+                await self._run_agent(user_input)
 
         while True:
             try:
@@ -97,60 +111,7 @@ class OrchestratorConversationClient:
                     tracker.print_summary()
                     continue
 
-                # Run the agent with current user input
-                print()  # Empty line before agent response
-                
-                try:
-                    # Build input with conversation history
-                    # Format: list of messages with role and content
-                    messages = []
-                    
-                    # Add conversation history
-                    for item in self.conversation_history:
-                        messages.append(item)
-                    
-                    # Add current user message
-                    messages.append({
-                        "role": "user",
-                        "content": user_input
-                    })
-
-                    result = await Runner.run(
-                        self.agent,
-                        messages if len(messages) > 1 else user_input,  # Pass list if history exists
-                        max_turns=30,
-                    )
-
-                    # Track observability metrics (mark as orchestrator to aggregate sub-agent metrics)
-                    tracker = get_tracker()
-                    metrics = tracker.track_interaction(
-                        user_input=user_input,
-                        result=result,
-                        is_orchestrator=True,
-                    )
-
-                    # Store user message in history
-                    self.conversation_history.append({
-                        "role": "user",
-                        "content": user_input
-                    })
-
-                    # Print the agent's response
-                    if result.final_output:
-                        print("Orchestrator:", result.final_output)
-                        # Store agent response in history
-                        self.conversation_history.append({
-                            "role": "assistant",
-                            "content": result.final_output
-                        })
-                    else:
-                        print("Orchestrator: (No response generated)")
-
-                    print()  # Empty line after response
-
-                except Exception as e:
-                    print(f"Error: {e}")
-                    logging.error(f"Error in conversation: {e}", exc_info=True)
+                await self._run_agent(user_input)
 
             except KeyboardInterrupt:
                 print("\n\nInterrupted. Goodbye!")
@@ -177,10 +138,72 @@ class OrchestratorConversationClient:
         print("=" * 80 + "\n")
 
 
-async def main() -> int:
-    """Main entry point for the conversation client."""
+    async def _run_agent(self, user_input: str) -> None:
+        """Run the agent with current user input and update history."""
+        print()  # Empty line before agent response
+
+        try:
+            # Build input with conversation history
+            # Format: list of messages with role and content
+            messages = []
+
+            # Add conversation history
+            for item in self.conversation_history:
+                messages.append(item)
+
+            # Add current user message
+            messages.append({
+                "role": "user",
+                "content": user_input
+            })
+
+            result = await Runner.run(
+                self.agent,
+                messages if len(messages) > 1 else user_input,  # Pass list if history exists
+                max_turns=30,
+            )
+
+            # Track observability metrics (mark as orchestrator to aggregate sub-agent metrics)
+            tracker = get_tracker()
+            tracker.track_interaction(
+                user_input=user_input,
+                result=result,
+                is_orchestrator=True,
+            )
+
+            # Store user message in history
+            self.conversation_history.append({
+                "role": "user",
+                "content": user_input
+            })
+
+            # Print the agent's response
+            if result.final_output:
+                print("Orchestrator:", result.final_output)
+                # Store agent response in history
+                self.conversation_history.append({
+                    "role": "assistant",
+                    "content": result.final_output
+                })
+            else:
+                print("Orchestrator: (No response generated)")
+
+            print()  # Empty line after response
+
+        except Exception as e:
+            print(f"Error: {e}")
+            logging.error(f"Error in conversation: {e}", exc_info=True)
+
+
+async def main(initial_query: Optional[str] = None) -> int:
+    """Main entry point for the conversation client.
+
+    Args:
+        initial_query: Optional initial user query to send as the first conversation
+            message before entering interactive loop.
+    """
     client = OrchestratorConversationClient()
-    await client.run_conversation()
+    await client.run_conversation(initial_query)
     return 0
 
 
