@@ -60,6 +60,7 @@ class ComprehensiveWorkloadTest:
         self.connections: List[mysql.connector.MySQLConnection] = []
         self.threads: List[threading.Thread] = []
         self.active_scenarios = defaultdict(int)
+        self._connections_lock = threading.Lock()
         
         # Intensity settings
         intensity_configs = {
@@ -86,8 +87,9 @@ class ComprehensiveWorkloadTest:
             
             conn = mysql.connector.connect(**connect_kwargs)
             # Add to tracking list (with safety limit to prevent excessive memory)
-            if len(self.connections) < 2000:  # Safety limit
-                self.connections.append(conn)
+            with self._connections_lock:
+                if len(self.connections) < 2000:  # Safety limit
+                    self.connections.append(conn)
             return conn
         except MySQLError as e:
             logger.error(f"Failed to create connection: {e}")
@@ -96,11 +98,16 @@ class ComprehensiveWorkloadTest:
     def remove_connection(self, conn: mysql.connector.MySQLConnection):
         """Remove a connection from the tracking list (thread-safe)."""
         try:
-            if conn in self.connections:
-                self.connections.remove(conn)
+            with self._connections_lock:
+                if conn in self.connections:
+                    self.connections.remove(conn)
         except (ValueError, AttributeError):
             # Connection not in list or list modified - ignore
             pass
+
+    def _connection_count(self) -> int:
+        with self._connections_lock:
+            return len(self.connections)
     
     def setup_tables(self):
         """Setup all test tables needed for various scenarios."""
@@ -669,7 +676,7 @@ class ComprehensiveWorkloadTest:
                     remaining = self.duration - elapsed
                     logger.info(
                         f"Workload running: {elapsed:.0f}s elapsed, {remaining:.0f}s remaining. "
-                        f"Active threads: {threading.active_count()}, Connections: {len(self.connections)}"
+                        f"Active threads: {threading.active_count()}, Connections: {self._connection_count()}"
                     )
                     last_log = time.time()
         except KeyboardInterrupt:
@@ -686,28 +693,22 @@ class ComprehensiveWorkloadTest:
         
         # Wait for threads to finish (with timeout)
         for thread in self.threads:
-            thread.join(timeout=2)
-        
-        # Close connections safely - check if already closed
-        # Use a copy of the list to avoid modification during iteration
-        connections_to_close = list(self.connections)
-        for conn in connections_to_close:
-            try:
-                # Check if connection exists and is still connected before closing
-                if conn and hasattr(conn, 'is_connected'):
-                    try:
-                        if conn.is_connected():
-                            conn.close()
-                    except Exception:
-                        # Connection might already be closed or in invalid state
-                        pass
-            except Exception:
-                # Connection object might be invalid
-                pass
-        
-        self.connections.clear()
+            thread.join(timeout=5)
+
+        # NOTE: Do not force-close remaining connections from the main thread.
+        # mysql-connector C extension can crash with double-free if a worker
+        # thread is concurrently finalizing the same connection.
+        with self._connections_lock:
+            lingering_connections = len(self.connections)
+            self.connections.clear()
         self.threads.clear()
-        
+        if lingering_connections > 0:
+            logger.warning(
+                "Cleanup finished with %s tracked connections. "
+                "They are released by process exit to avoid cross-thread close races.",
+                lingering_connections,
+            )
+
         logger.info(f"Cleanup complete. Active scenarios: {dict(self.active_scenarios)}")
 
 

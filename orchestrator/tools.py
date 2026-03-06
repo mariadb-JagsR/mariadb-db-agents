@@ -8,6 +8,15 @@ from typing import Any
 from agents import function_tool
 
 
+def _emit_progress(message: str) -> None:
+    try:
+        from ..ui_api.progress import publish_progress
+        publish_progress(message)
+    except Exception:
+        # UI progress is optional; never break tool execution.
+        pass
+
+
 @function_tool
 async def analyze_slow_queries(
     hours: float = 1.0,
@@ -30,6 +39,7 @@ async def analyze_slow_queries(
     """
     from ..agents.slow_query.main import run_agent_async
     from ..common.observability import get_tracker, add_orchestrator_sub_agent_metric
+    _emit_progress("Running Slow Query Analysis...")
     
     try:
         # Track metrics before running agent
@@ -61,6 +71,7 @@ async def analyze_slow_queries(
             "success": True,
         }
     except Exception as e:
+        _emit_progress("Slow Query Analysis failed.")
         return {
             "report": f"Error running Slow Query Agent: {str(e)}",
             "agent": "slow_query",
@@ -93,6 +104,7 @@ async def analyze_running_queries(
     """
     from ..agents.running_query.main import run_agent_async
     from ..common.observability import get_tracker, add_orchestrator_sub_agent_metric
+    _emit_progress("Analyzing Running Queries...")
     
     try:
         # Track metrics before running agent
@@ -125,6 +137,7 @@ async def analyze_running_queries(
             "success": True,
         }
     except Exception as e:
+        _emit_progress("Running Query Analysis failed.")
         return {
             "report": f"Error running Running Query Agent: {str(e)}",
             "agent": "running_query",
@@ -164,6 +177,7 @@ async def perform_incident_triage(
     """
     from ..agents.incident_triage.main import run_agent_async
     from ..common.observability import get_tracker, add_orchestrator_sub_agent_metric
+    _emit_progress("Performing Incident Triage...")
     
     try:
         # Track metrics before running agent
@@ -198,6 +212,7 @@ async def perform_incident_triage(
             "success": True,
         }
     except Exception as e:
+        _emit_progress("Incident Triage failed.")
         return {
             "report": f"Error running Incident Triage Agent: {str(e)}",
             "agent": "incident_triage",
@@ -232,6 +247,7 @@ async def check_replication_health(
     """
     from ..agents.replication_health.main import run_agent_async
     from ..common.observability import get_tracker, add_orchestrator_sub_agent_metric
+    _emit_progress("Checking Replication Health...")
     
     try:
         # Track metrics before running agent
@@ -263,6 +279,7 @@ async def check_replication_health(
             "success": True,
         }
     except Exception as e:
+        _emit_progress("Replication Health check failed.")
         return {
             "report": f"Error running Replication Health Agent: {str(e)}",
             "agent": "replication_health",
@@ -294,6 +311,7 @@ async def execute_database_query(
     """
     from ..agents.database_inspector.main import run_agent_async
     from ..common.observability import get_tracker, add_orchestrator_sub_agent_metric
+    _emit_progress("Running Database Inspector query...")
     
     try:
         # Track metrics before running agent
@@ -327,6 +345,7 @@ async def execute_database_query(
             "success": True,
         }
     except Exception as e:
+        _emit_progress("Database Inspector query failed.")
         return {
             "report": f"Error executing database query: {str(e)}",
             "agent": "database_inspector",

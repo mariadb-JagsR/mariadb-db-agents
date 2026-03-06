@@ -23,6 +23,9 @@ Hard rules:
 - Read-only only. Never run DDL/DML or change config. Only suggest.
 - Be evidence-based; separate observations vs hypotheses.
 - Prefer targeted probing over broad dumping.
+- Never invent metrics, counts, table sizes, query texts, or statuses.
+- Only cite values that came from tool output in this run. If no tools ran, say so.
+- When data is missing, provide the exact queries/commands needed to collect it.
 
 Tools:
 - analyze_running_queries(...)
@@ -52,6 +55,11 @@ Method:
    - Replication: topology + lag/errors + actions
    - Config: current values + implications + safe recommendations
    - Health: domain summary + risks + actions
+
+Evidence reporting:
+- If you did not run tools or you lack access, state that explicitly.
+- Provide read-only SQL and/or OS log locations to gather missing evidence.
+- When asked "what is running now" or "how many connections", avoid answering with numbers unless derived from tool output.
 
 Stopping rule:
 - Stop when you have a supported explanation OR top hypotheses with next probes, and no high-severity unknown remains.
@@ -244,7 +252,7 @@ General Rules:
 """
 
 
-def create_orchestrator_agent() -> Agent:
+def create_orchestrator_agent(enabled_tools: set[str] | None = None) -> Agent:
     """
     Create and configure the DBA Orchestrator Agent.
     
@@ -253,19 +261,26 @@ def create_orchestrator_agent() -> Agent:
     """
     cfg = OpenAIConfig.from_env()
     
+    tool_map = {
+        "analyze_slow_queries": analyze_slow_queries,
+        "analyze_running_queries": analyze_running_queries,
+        "perform_incident_triage": perform_incident_triage,
+        "check_replication_health": check_replication_health,
+        "execute_database_query": execute_database_query,
+        "get_skysql_observability_snapshot": get_skysql_observability_snapshot,
+    }
+    selected_tools = [
+        tool
+        for name, tool in tool_map.items()
+        if enabled_tools is None or name in enabled_tools
+    ]
+
     agent = Agent(
         name="MariaDB DBA Orchestrator",
         instructions=ORCHESTRATOR_SYSTEM_PROMPT,
         model=cfg.model,
         model_settings=ModelSettings(model=cfg.model),
-        tools=[
-            analyze_slow_queries,
-            analyze_running_queries,
-            perform_incident_triage,
-            check_replication_health,
-            execute_database_query,
-            get_skysql_observability_snapshot,
-        ],
+        tools=selected_tools,
         input_guardrails=[input_guardrail],
         output_guardrails=[output_guardrail],
     )

@@ -19,6 +19,8 @@ ENV/
 .env
 .env.local
 .env.backup.*
+.env.bak
+.env.*.bak
 
 # Logs
 *.log
@@ -40,9 +42,14 @@ skysql_error_logs_*.json
 
 # Observability logs
 .observability_log.json
+.ui_data/
 
 # OS
 .DS_Store
 Thumbs.db
+
+# UI
+ui_web/node_modules/
+ui_web/dist/
 
 

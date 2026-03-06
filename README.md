@@ -2,6 +2,8 @@
 
 AI-powered agents that analyze, optimize, and troubleshoot MariaDB databases using natural language. Ask questions like "Is my database healthy?" or "Why are queries slow?" and get intelligent, actionable insights.
 
+![MariaDB + MySQL DBA Recommender Demo](docs/media/dba-assist-demo.gif)
+
 ## Overview
 
 A comprehensive platform with specialized AI agents for different aspects of MariaDB database management:
@@ -71,6 +73,19 @@ Configure the MCP server in your IDE and use agents directly in chat:
 3. Ask questions in Cursor chat: "What queries are running right now?"
 
 See [MCP Setup Guide](docs/MCP_SETUP.md) for detailed instructions.
+
+### 4. Local Web UI (FastAPI + React)
+
+Run the orchestrator with a local chat UI (markdown rendering, config editor, profile switching, agent toggles, and token dashboards):
+
+```bash
+cd mariadb_db_agents
+./scripts/run_ui.sh
+```
+
+This starts:
+- API backend: `http://127.0.0.1:8000`
+- React UI: `http://127.0.0.1:5173`
 
 ---
 
@@ -505,7 +520,13 @@ mariadb_db_agents/
 │
 ├── scripts/                     # Utility scripts
 │   ├── generate_slow_queries.py
+│   ├── run_evals.py
 │   └── ...
+│
+├── evals/                        # Evaluation datasets and results
+│   ├── datasets/
+│   ├── results/
+│   └── README.md
 │
 ├── docs/                        # Documentation
 │   ├── HIGH_VALUE_AUTOMATION_OPPORTUNITIES.md
@@ -518,6 +539,16 @@ mariadb_db_agents/
 ├── enable_performance_schema.sql
 └── README.md
 ```
+
+## Evaluation
+
+Run LLM-as-judge evaluations using the built-in harness:
+
+```bash
+python -m mariadb_db_agents.scripts.run_evals
+```
+
+See `evals/README.md` for datasets, judge configuration, and output details.
 
 ## Performance Schema Integration
 

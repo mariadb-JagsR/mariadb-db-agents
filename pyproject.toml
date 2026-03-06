@@ -33,6 +33,8 @@ dependencies = [
     "requests>=2.31.0",
     "python-dateutil>=2.8.0",
     "mcp>=0.9.0",
+    "fastapi>=0.116.0",
+    "uvicorn>=0.35.0",
 ]
 
 [project.optional-dependencies]
@@ -46,10 +48,11 @@ dev = [
 [project.scripts]
 mariadb-db-agents = "mariadb_db_agents.cli.main:main"
 mariadb-db-agents-mcp = "mariadb_db_agents.mcp_server.main:main"
+mariadb-db-agents-ui-api = "mariadb_db_agents.ui_api.main:main"
 
 [tool.setuptools]
 package-dir = {"mariadb_db_agents" = "."}
-packages = ["mariadb_db_agents", "mariadb_db_agents.agents", "mariadb_db_agents.agents.slow_query", "mariadb_db_agents.agents.running_query", "mariadb_db_agents.agents.incident_triage", "mariadb_db_agents.agents.replication_health", "mariadb_db_agents.agents.database_inspector", "mariadb_db_agents.cli", "mariadb_db_agents.common", "mariadb_db_agents.orchestrator", "mariadb_db_agents.mcp_server"]
+packages = ["mariadb_db_agents", "mariadb_db_agents.agents", "mariadb_db_agents.agents.slow_query", "mariadb_db_agents.agents.running_query", "mariadb_db_agents.agents.incident_triage", "mariadb_db_agents.agents.replication_health", "mariadb_db_agents.agents.database_inspector", "mariadb_db_agents.cli", "mariadb_db_agents.common", "mariadb_db_agents.orchestrator", "mariadb_db_agents.mcp_server", "mariadb_db_agents.ui_api"]
 
 [tool.black]
 line-length = 100
