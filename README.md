@@ -19,7 +19,9 @@ All agents use the **OpenAI Agents SDK** to intelligently query your database an
 
 ## Quick Start
 
-### 1. Install & Configure
+### 1. UI First (Recommended)
+
+Run the local web app for the easiest onboarding (chat, markdown rendering, config editor, profile switching, agent toggles, and token dashboards):
 
 ```bash
 # Clone and install
@@ -29,63 +31,45 @@ pip install -e .
 
 # Configure environment
 cp .env.example .env
-# Edit .env with your database credentials and OpenAI API key
-```
+# Edit .env with your database credentials and OPENAI_API_KEY
 
-### 2. Try It Out!
-
-**Example 1: Interactive Mode (Recommended)**
-```bash
-python -m mariadb_db_agents.cli.main orchestrator --interactive
-```
-
-The Orchestrator is typically all you need! It intelligently routes your questions to the right specialized agents. Just ask natural language questions like:
-- "Is my database healthy?"
-- "Analyze slow queries from the last hour"
-- "What queries are running right now?"
-
-**Tip:** You can pass `--interactive` before the agent name too:
-```bash
-python -m mariadb_db_agents.cli.main --interactive orchestrator
-```
-
-**Need inspiration?** See [Sample DBA Questions](docs/SAMPLE_DBA_QUESTIONS.md) for complex root cause analysis scenarios and multi-part investigations.
-
-**Example 2: One-Shot Queries**
-```bash
-# Health check
-python -m mariadb_db_agents.cli.main "Is my database healthy?"
-
-# Same thing with explicit agent
-python -m mariadb_db_agents.cli.main orchestrator "Is my database healthy?"
-### NOTE: this will take more than a minute to respond as it engages several Agents and makes many turns with the LLM. 
-
-# Analyze slow queries
-python -m mariadb_db_agents.cli.main orchestrator "Analyze slow queries from the last hour"
-```
-
-### 3. Use in Your IDE (Cursor/Windsurf)
-
-Configure the MCP server in your IDE and use agents directly in chat:
-
-1. Open Cursor Settings → **Tools & MCP**
-2. Add the MCP server configuration (see [MCP Setup Guide](docs/MCP_SETUP.md))
-3. Ask questions in Cursor chat: "What queries are running right now?"
-
-See [MCP Setup Guide](docs/MCP_SETUP.md) for detailed instructions.
-
-### 4. Local Web UI (FastAPI + React)
-
-Run the orchestrator with a local chat UI (markdown rendering, config editor, profile switching, agent toggles, and token dashboards):
-
-```bash
+# Launch UI + API
 cd mariadb_db_agents
 ./scripts/run_ui.sh
 ```
 
-This starts:
-- API backend: `http://127.0.0.1:8000`
-- React UI: `http://127.0.0.1:5173`
+Open:
+- UI: `http://127.0.0.1:5173`
+- API: `http://127.0.0.1:8000`
+
+In the UI, try:
+- "Is my database healthy?"
+- "Analyze slow queries from the last hour"
+- "What queries are running right now?"
+
+**Need inspiration?** See [Sample DBA Questions](docs/SAMPLE_DBA_QUESTIONS.md).
+
+### 2. Troubleshooting (UI Startup)
+
+- If you see `Load failed`, the API process likely did not start. Re-run `./scripts/run_ui.sh` and check backend logs in the same terminal.
+- Ensure `.env` includes valid `OPENAI_API_KEY`, `DB_HOST`, `DB_USER`, and `DB_PASSWORD`.
+
+### 3. Other Ways to Use It
+
+**CLI interactive mode**
+```bash
+python -m mariadb_db_agents.cli.main orchestrator --interactive
+```
+
+**CLI one-shot**
+```bash
+python -m mariadb_db_agents.cli.main orchestrator "Is my database healthy?"
+```
+
+**IDE (Cursor/Windsurf) via MCP**
+1. Open Cursor Settings -> **Tools & MCP**
+2. Add MCP server config (see [MCP Setup Guide](docs/MCP_SETUP.md))
+3. Ask in chat: "What queries are running right now?"
 
 ---
 
