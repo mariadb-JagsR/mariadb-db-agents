@@ -131,3 +131,17 @@ def test_long_history_adds_summary_and_recent_turns(monkeypatch) -> None:
     # Recent messages still appear explicitly.
     assert "message 17" in prompt
 
+
+def test_format_run_error_identifies_openai_connectivity() -> None:
+    message = orchestrator_service._format_run_error(Exception("Connection error."))
+    assert "OpenAI API connectivity failed" in message
+    assert "not the database connection" in message
+
+
+def test_format_run_error_identifies_database_connection() -> None:
+    message = orchestrator_service._format_run_error(
+        Exception("2003 (HY000): Can't connect to MySQL server on 'host'")
+    )
+    assert "Database connection failed" in message
+    assert "DB_HOST" in message
+

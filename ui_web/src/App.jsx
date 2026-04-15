@@ -6,7 +6,7 @@ import mysqlLogo from "./assets/mysql-logo.svg";
 import mariadbLogo from "./assets/mariadb-logo.svg";
 
 const SIDEBAR_TABS = ["chat", "config", "profiles", "agents", "observability"];
-const APP_NAME = "MariaDB + MySQL DBA Recommender";
+const APP_NAME = "MariaDB + MySQL Root-Cause Insight";
 const SECRET_MASK = "********";
 const SECRET_CONFIG_KEYS = new Set(["OPENAI_API_KEY", "DB_PASSWORD", "SKYSQL_API_KEY"]);
 const AGENT_LABELS = {
@@ -77,6 +77,26 @@ function extractNextStepsFromText(text) {
   return steps.slice(0, 10);
 }
 
+function buildErrorHelp(errorMessage) {
+  const message = (errorMessage || "").toLowerCase();
+  if (!message) {
+    return null;
+  }
+  if (message.includes("openai api connectivity failed")) {
+    return "OpenAI API connectivity issue (not database): check internet, VPN/proxy/firewall, then retry.";
+  }
+  if (message.includes("openai api authentication/usage failed")) {
+    return "OpenAI auth/quota issue: verify OPENAI_API_KEY, model access, and account quota.";
+  }
+  if (message.includes("database connection failed")) {
+    return "Database connection issue: verify DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_DATABASE and SSL settings.";
+  }
+  if (message.includes("cannot reach backend api")) {
+    return "UI cannot reach local API: make sure ./scripts/run_ui.sh is running.";
+  }
+  return null;
+}
+
 export function App() {
   const [activeTab, setActiveTab] = useState("chat");
   const [messages, setMessages] = useState([]);
@@ -95,9 +115,12 @@ export function App() {
   const [runProgress, setRunProgress] = useState([]);
   const [apiConnected, setApiConnected] = useState(false);
   const [isLoadingBootstrap, setIsLoadingBootstrap] = useState(false);
+  const [showStarterQuestions, setShowStarterQuestions] = useState(false);
+  const [showInsights, setShowInsights] = useState(false);
   const chatEndRef = useRef(null);
 
   const latestRun = useMemo(() => observability.recent_runs.at(-1), [observability]);
+  const errorHelp = useMemo(() => buildErrorHelp(error), [error]);
   const latestProgressMessage = useMemo(() => {
     if (!isRunning) {
       return "";
@@ -309,11 +332,14 @@ export function App() {
   }
 
   return (
-    <>
+    <div className="app-root">
       <header className="top-banner">
         <div className="top-banner-title">
           <h1>{APP_NAME}</h1>
-          <p>AI assistant for performance analysis, health checks, and troubleshooting.</p>
+          <p>
+            Go beyond surface metrics—trace problems to real causes, validate with evidence, and get
+            actionable next steps for performance, health, and incidents.
+          </p>
         </div>
         <div className="logo-strip">
           <img src={mysqlLogo} alt="MySQL logo" />
@@ -354,15 +380,23 @@ export function App() {
             </div>
           </div>
         )}
-        {error && <div className="error">{error}</div>}
+        {error && (
+          <div className="error">
+            <div>{error}</div>
+            {errorHelp && <div className="error-help">{errorHelp}</div>}
+          </div>
+        )}
         {isLoadingBootstrap && <div className="info">Loading configuration and history...</div>}
 
         {activeTab === "chat" && (
-          <section className="chat-layout">
+          <section className={showInsights ? "chat-layout with-insights" : "chat-layout"}>
             <div className="panel">
               <div className="chat-header">
                 <h3>Chat</h3>
                 <div className="row-gap">
+                  <button onClick={() => setShowInsights((prev) => !prev)}>
+                    {showInsights ? "Hide Insights" : "Show Insights"}
+                  </button>
                   <button onClick={startNewChat}>Start New Chat</button>
                   <button className="danger" onClick={clearCurrentChat}>
                     Clear Current Chat
@@ -414,18 +448,27 @@ export function App() {
                 <ChatComposer onSend={handleSend} disabled={isRunning} />
               </div>
               <div className="starter-questions">
-                <h4>Starter Questions</h4>
-                <div className="chip-row">
-                  {STARTER_QUESTIONS.map((question) => (
-                    <button
-                      key={question}
-                      className="chip-button"
-                      onClick={() => handleStarterQuestion(question)}
-                      disabled={isRunning}
-                    >
-                      {question}
-                    </button>
-                  ))}
+                <button
+                  className="subtle-button"
+                  onClick={() => setShowStarterQuestions((prev) => !prev)}
+                  disabled={isRunning}
+                >
+                  {showStarterQuestions ? "Hide quick prompts" : "Show quick prompts"}
+                </button>
+                <div className={showStarterQuestions ? "starter-panel visible" : "starter-panel"}>
+                  <h4>Quick Prompts</h4>
+                  <div className="chip-row">
+                    {STARTER_QUESTIONS.map((question) => (
+                      <button
+                        key={question}
+                        className="chip-button"
+                        onClick={() => handleStarterQuestion(question)}
+                        disabled={isRunning}
+                      >
+                        {question}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
               <div className="next-steps">
@@ -442,57 +485,59 @@ export function App() {
               </div>
             </div>
 
-            <aside className="panel side-panel">
-              <h3>Observability</h3>
-              <p className="helper-text">Right now + cumulative usage across runs.</p>
-              <h4>Last Invocation</h4>
-              {lastResponseMetrics ? (
+            {showInsights && (
+              <aside className="panel side-panel">
+                <h3>Observability</h3>
+                <p className="helper-text">Right now + cumulative usage across runs.</p>
+                <h4>Last Invocation</h4>
+                {lastResponseMetrics ? (
+                  <div className="status-grid single-col">
+                    {Object.entries(lastResponseMetrics).map(([key, value]) => (
+                      <div key={key} className="status good">
+                        {key}: {typeof value === "number" ? value.toLocaleString() : String(value)}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p>No invocation metrics yet.</p>
+                )}
+                <h4>Cumulative Totals</h4>
                 <div className="status-grid single-col">
-                  {Object.entries(lastResponseMetrics).map(([key, value]) => (
+                  {Object.entries(observability.summary || {}).map(([key, value]) => (
                     <div key={key} className="status good">
                       {key}: {typeof value === "number" ? value.toLocaleString() : String(value)}
                     </div>
                   ))}
                 </div>
-              ) : (
-                <p>No invocation metrics yet.</p>
-              )}
-              <h4>Cumulative Totals</h4>
-              <div className="status-grid single-col">
-                {Object.entries(observability.summary || {}).map(([key, value]) => (
-                  <div key={key} className="status good">
-                    {key}: {typeof value === "number" ? value.toLocaleString() : String(value)}
-                  </div>
-                ))}
-              </div>
-              <h4>Recent Runs</h4>
-              <div className="mini-runs">
-                {(observability.recent_runs || []).slice(-5).reverse().map((run) => (
-                  <div key={run.run_id} className="mini-run">
-                    <div>{new Date(run.created_at).toLocaleString()}</div>
-                    <div>tokens: {(run.metrics?.total_tokens || 0).toLocaleString()}</div>
-                    <div>round trips: {run.metrics?.total_round_trips || 0}</div>
-                  </div>
-                ))}
-              </div>
-              {isRunning && (
-                <>
-                  <h4>Live Progress</h4>
-                  <div className="mini-runs">
-                    {runProgress.length === 0 ? (
-                      <div className="mini-run">Starting...</div>
-                    ) : (
-                      runProgress.slice(-8).map((item) => (
-                        <div key={`${item.timestamp}-${item.message}`} className="mini-run">
-                          <div>{new Date(item.timestamp).toLocaleTimeString()}</div>
-                          <div>{item.message}</div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </>
-              )}
-            </aside>
+                <h4>Recent Runs</h4>
+                <div className="mini-runs">
+                  {(observability.recent_runs || []).slice(-5).reverse().map((run) => (
+                    <div key={run.run_id} className="mini-run">
+                      <div>{new Date(run.created_at).toLocaleString()}</div>
+                      <div>tokens: {(run.metrics?.total_tokens || 0).toLocaleString()}</div>
+                      <div>round trips: {run.metrics?.total_round_trips || 0}</div>
+                    </div>
+                  ))}
+                </div>
+                {isRunning && (
+                  <>
+                    <h4>Live Progress</h4>
+                    <div className="mini-runs">
+                      {runProgress.length === 0 ? (
+                        <div className="mini-run">Starting...</div>
+                      ) : (
+                        runProgress.slice(-8).map((item) => (
+                          <div key={`${item.timestamp}-${item.message}`} className="mini-run">
+                            <div>{new Date(item.timestamp).toLocaleTimeString()}</div>
+                            <div>{item.message}</div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </>
+                )}
+              </aside>
+            )}
           </section>
         )}
 
@@ -628,7 +673,7 @@ export function App() {
         )}
         </main>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -649,6 +694,12 @@ function ChatComposer({ onSend, disabled }) {
       <textarea
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            submit();
+          }
+        }}
         placeholder="Ask: Is my database healthy?"
         rows={4}
       />

@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import logging
+import re
+from collections import defaultdict
 from typing import Any, List, Dict
 
 import mysql.connector
@@ -26,56 +28,157 @@ def is_read_only_sql(sql: str) -> bool:
     return not any(stripped.startswith(pfx) for pfx in forbidden_prefixes)
 
 
-def detect_table_database(sql: str, cfg: DBConfig) -> str | None:
+# Fixed order for SQL ``NOT IN (%s, ...)`` placeholders
+_IS_SKIP_SCHEMAS = ("information_schema", "performance_schema", "sys")
+
+# Unqualified identifiers that are not user tables (avoid bogus scans)
+_UNQUALIFIED_TABLE_SKIP = frozenset({"dual"})
+
+
+def _table_exists_in_schema(cursor: Any, schema: str, table: str) -> bool:
+    cursor.execute(
+        """
+        SELECT 1 FROM information_schema.TABLES
+        WHERE TABLE_SCHEMA = %s AND LOWER(TABLE_NAME) = LOWER(%s)
+        LIMIT 1
+        """,
+        (schema, table),
+    )
+    return cursor.fetchone() is not None
+
+
+def _tables_existing_in_schema(cursor: Any, schema: str, tables: list[str]) -> set[str]:
+    if not tables:
+        return set()
+    unique = list(dict.fromkeys(tables))
+    placeholders = ",".join(["%s"] * len(unique))
+    cursor.execute(
+        f"""
+        SELECT TABLE_NAME FROM information_schema.TABLES
+        WHERE TABLE_SCHEMA = %s AND TABLE_NAME IN ({placeholders})
+        """,
+        (schema, *unique),
+    )
+    return {row["TABLE_NAME"] for row in cursor.fetchall()}
+
+
+def _fetch_schemas_for_tables(cursor: Any, tables: list[str]) -> dict[str, list[str]]:
+    """Map each requested table name to sorted schemas that contain it (non-system + mysql)."""
+    if not tables:
+        return {}
+    unique = list(dict.fromkeys(tables))
+    placeholders = ",".join(["%s"] * len(unique))
+    skip = ",".join(["%s"] * len(_IS_SKIP_SCHEMAS))
+    cursor.execute(
+        f"""
+        SELECT TABLE_NAME, TABLE_SCHEMA
+        FROM information_schema.TABLES
+        WHERE TABLE_SCHEMA NOT IN ({skip})
+          AND TABLE_NAME IN ({placeholders})
+        ORDER BY TABLE_SCHEMA
+        """,
+        (*_IS_SKIP_SCHEMAS, *unique),
+    )
+    buckets: dict[str, list[str]] = defaultdict(list)
+    for row in cursor.fetchall():
+        buckets[row["TABLE_NAME"]].append(row["TABLE_SCHEMA"])
+    return {t: buckets.get(t, []) for t in unique}
+
+
+def _common_schema_for_tables(
+    cursor: Any,
+    tables: list[str],
+    preferred: str | None,
+) -> str | None:
     """
-    Try to detect which database a table belongs to by checking if it exists.
-    This is a fallback when SQL doesn't have explicit database.table syntax.
-    
-    Common tables we know about:
-    - beer_reviews_flat -> beer_reviews
-    - slow_log -> mysql
+    If tables share exactly one schema, return it. If several schemas contain all tables,
+    prefer cfg.database when it matches. Otherwise log and return None.
     """
-    import re
-    
-    # Known table to database mappings
-    known_tables = {
-        'beer_reviews_flat': 'beer_reviews',
-        'slow_log': 'mysql',
-        'beer_reviews_small': 'beer_reviews',
-    }
-    
-    # Extract table names from SQL - handle both database.table and just table
-    # Pattern 1: Extract from database.table syntax (e.g., mysql.beer_reviews_flat -> beer_reviews_flat)
-    db_table_pattern = r'(?:FROM|JOIN|UPDATE|INTO|TABLE)\s+`?(\w+)`?\.`?(\w+)`?'
-    matches = re.finditer(db_table_pattern, sql, re.IGNORECASE)
-    for match in matches:
-        db_name = match.group(1).lower()
-        table_name = match.group(2).lower()
-        # If database is mysql but table is known to be in another DB, return that DB
-        if db_name == 'mysql' and table_name in known_tables:
-            return known_tables[table_name]
-        # If table is known, return its database
-        if table_name in known_tables:
-            return known_tables[table_name]
-    
-    # Pattern 2: Extract table names without database prefix
-    table_patterns = [
-        r'FROM\s+(?!`?\w+`?\.)`?(\w+)`?(?:\s|$|,|WHERE|JOIN|LIMIT|ORDER|GROUP|HAVING)',  # FROM table (not db.table)
-        r'JOIN\s+(?!`?\w+`?\.)`?(\w+)`?(?:\s|$|ON|WHERE|LIMIT|ORDER|GROUP|HAVING)',  # JOIN table (not db.table)
-        r'UPDATE\s+(?!`?\w+`?\.)`?(\w+)`?(?:\s|$|SET)',  # UPDATE table (not db.table)
-        r'INTO\s+(?!`?\w+`?\.)`?(\w+)`?(?:\s|$|\(|VALUES)',  # INTO table (not db.table)
-        r'SHOW\s+(?:CREATE\s+TABLE|INDEX\s+FROM|COLUMNS\s+FROM)\s+(?!`?\w+`?\.)`?(\w+)`?(?:\s|$|FROM)',  # SHOW ... table (not db.table)
-        r'TABLE\s+(?!`?\w+`?\.)`?(\w+)`?(?:\s|$|\(|SET|WHERE)',  # TABLE name (not db.table)
-    ]
-    
-    for pattern in table_patterns:
-        matches = re.finditer(pattern, sql, re.IGNORECASE)
-        for match in matches:
-            table_name = match.group(1).lower()
-            if table_name in known_tables:
-                return known_tables[table_name]
-    
+    if not tables:
+        return None
+    unique_tables = list(dict.fromkeys(tables))
+    schema_map = _fetch_schemas_for_tables(cursor, unique_tables)
+    sets: list[set[str]] = []
+    for t in unique_tables:
+        schemas = schema_map.get(t, [])
+        if not schemas:
+            logger.debug("Table %r not found in information_schema.TABLES", t)
+            return None
+        sets.append(set(schemas))
+    common = set.intersection(*sets)
+    if len(common) == 1:
+        return next(iter(common))
+    if not common:
+        logger.warning(
+            "Tables %s do not resolve to one database (no schema contains all of them).",
+            unique_tables,
+        )
+        return None
+    if preferred:
+        for s in common:
+            if s.lower() == preferred.lower():
+                logger.debug(
+                    "Schemas %s all contain %s; choosing preferred %s",
+                    sorted(common),
+                    unique_tables,
+                    s,
+                )
+                return s
+    logger.warning(
+        "Tables %s are ambiguous: schemas containing all of them: %s",
+        unique_tables,
+        sorted(common),
+    )
     return None
+
+
+def _extract_mysql_prefixed_tables(sql: str) -> list[str]:
+    return list(
+        dict.fromkeys(m.group(1) for m in re.finditer(r"\bmysql\.`?(\w+)`?", sql, re.IGNORECASE))
+    )
+
+
+def _extract_unqualified_table_names(sql: str) -> list[str]:
+    table_patterns = [
+        r"FROM\s+(?!`?\w+`?\.)`?(\w+)`?(?:\s|$|,|WHERE|JOIN|LIMIT|ORDER|GROUP|HAVING)",
+        r"JOIN\s+(?!`?\w+`?\.)`?(\w+)`?(?:\s|$|ON|WHERE|LIMIT|ORDER|GROUP|HAVING)",
+        r"UPDATE\s+(?!`?\w+`?\.)`?(\w+)`?(?:\s|$|SET)",
+        r"INTO\s+(?!`?\w+`?\.)`?(\w+)`?(?:\s|$|\(|VALUES)",
+        r"SHOW\s+(?:CREATE\s+TABLE|INDEX\s+FROM|COLUMNS\s+FROM)\s+(?!`?\w+`?\.)`?(\w+)`?(?:\s|$|FROM)",
+        r"TABLE\s+(?!`?\w+`?\.)`?(\w+)`?(?:\s|$|\(|SET|WHERE)",
+    ]
+    found: list[str] = []
+    for pattern in table_patterns:
+        for m in re.finditer(pattern, sql, re.IGNORECASE):
+            name = m.group(1)
+            if name.lower() in _UNQUALIFIED_TABLE_SKIP:
+                continue
+            found.append(name)
+    return list(dict.fromkeys(found))
+
+
+def detect_table_database(sql: str, cfg: DBConfig, cursor: Any) -> str | None:
+    """
+    Resolve a default database when SQL omits schema qualifiers or uses a wrong
+    ``mysql.`` prefix, using ``information_schema.TABLES``.
+
+    - Unqualified table names: intersect schemas that contain every table; if that set
+      has one member (or preferred ``cfg.database`` disambiguates), return it.
+    - ``mysql.<table>`` where ``table`` is not in the ``mysql`` schema: same resolution
+      for those tables (typical LLM mistake).
+
+    Returns None when nothing needs resolution, tables are unknown, or resolution is ambiguous.
+    """
+    mysql_refs = _extract_mysql_prefixed_tables(sql)
+    existing_in_mysql = _tables_existing_in_schema(cursor, "mysql", mysql_refs)
+    existing_lower = {x.lower() for x in existing_in_mysql}
+    bogus_mysql = [t for t in mysql_refs if t.lower() not in existing_lower]
+    unqualified = _extract_unqualified_table_names(sql)
+
+    candidates = list(dict.fromkeys([*bogus_mysql, *unqualified]))
+    if not candidates:
+        return None
+    return _common_schema_for_tables(cursor, candidates, cfg.database)
 
 
 def extract_database_from_sql(sql: str) -> str | None:
@@ -83,13 +186,11 @@ def extract_database_from_sql(sql: str) -> str | None:
     Extract database name from SQL query if it's explicitly referenced.
     
     Examples:
-    - "SELECT * FROM beer_reviews.beer_reviews_flat" -> "beer_reviews"
+    - "SELECT * FROM sales.orders" -> "sales"
     - "SELECT * FROM mysql.slow_log" -> "mysql"
-    - "SHOW TABLES FROM beer_reviews" -> "beer_reviews"
-    - "SELECT * FROM beer_reviews_flat" -> None (no explicit database)
+    - "SHOW TABLES FROM analytics" -> "analytics"
+    - "SELECT * FROM orders" -> None (no explicit database)
     """
-    import re
-    
     # Look for database.table pattern or SHOW TABLES FROM database
     # Pattern: database.table or `database`.`table`
     patterns = [
@@ -133,111 +234,79 @@ def run_readonly_query(
         max_rows: Maximum number of rows to return
         timeout_seconds: Connection timeout
         database: Optional database name to use. If not provided, will try to extract
-                  from SQL (e.g., beer_reviews.table_name) or use default from config.
+                  ``schema.table`` from SQL, resolve unqualified names via ``information_schema``,
+                  or use ``DB_DATABASE`` from config.
     """
     if not is_read_only_sql(sql):
         raise ValueError(f"Refusing to execute non read-only SQL: {sql[:80]}...")
 
     cfg = DBConfig.from_env()
-    
-    # Determine which database to use
     target_database = database
-    
-    # First, try to detect from table names (this catches beer_reviews_flat even without prefix)
-    detected_table_db = detect_table_database(sql, cfg)
-    
-    if not target_database:
-        # Try to extract from SQL (database.table syntax)
-        target_database = extract_database_from_sql(sql)
-    
-    # CRITICAL FIX: If SQL has mysql.table_name but table_name is known to be in another DB,
-    # override the database. This handles cases where agent incorrectly generates mysql.beer_reviews_flat
-    if target_database and target_database.lower() == 'mysql':
-        # Check if the table name suggests it's actually in a different database
-        if detected_table_db and detected_table_db.lower() != 'mysql':
-            logger.warning(
-                f"SQL has 'mysql.' prefix but table is in '{detected_table_db}' database. "
-                f"Overriding to use '{detected_table_db}' database."
-            )
-            target_database = detected_table_db
-    
-    # If still no database, use the detected table database
-    if not target_database:
-        target_database = detected_table_db
-        if target_database:
-            logger.debug(f"Detected database '{target_database}' from table name in SQL")
-    
-    # Default to config database if no database specified in query
-    if not target_database:
-        target_database = cfg.database
-        logger.debug(f"Using default database '{target_database}' from config")
-    
-    logger.debug(f"Executing SQL in database '{target_database}': {sql[:100]}...")
-    
+
     conn = None
     try:
-        # Connect without specifying database first (to allow switching)
-        # Determine SSL configuration based on host/environment
-        # Some SkySQL instances require SSL with certificate verification
         connect_kwargs = {
-            'host': cfg.host,
-            'port': cfg.port,
-            'user': cfg.user,
-            'password': cfg.password,
-            'connection_timeout': timeout_seconds,
+            "host": cfg.host,
+            "port": cfg.port,
+            "user": cfg.user,
+            "password": cfg.password,
+            "connection_timeout": timeout_seconds,
         }
-        
-        if 'skysql.com' in cfg.host.lower():
-            # SkySQL instances require SSL with certificate verification
-            # mysql-connector-python will use SSL if server requires it
-            # For explicit SSL with verification, we don't disable SSL
-            # SSL verification is the default behavior when SSL is enabled
-            # This matches --ssl-verify-server-cert behavior from mariadb CLI
-            # Note: mysql-connector-python handles SSL automatically when server requires it
-            pass  # Let connector handle SSL automatically (default behavior)
-        else:
-            # For local/other connections, SSL may not be required
-            connect_kwargs['ssl_disabled'] = True
-        
-        conn = mysql.connector.connect(**connect_kwargs)
 
+        if "skysql.com" in cfg.host.lower():
+            pass  # Let connector negotiate SSL when the server requires it
+        else:
+            connect_kwargs["ssl_disabled"] = True
+
+        conn = mysql.connector.connect(**connect_kwargs)
         cursor = conn.cursor(dictionary=True)
         cursor.execute("SET SESSION TRANSACTION READ ONLY")
-        
-        # Switch to the target database
+
+        if not target_database:
+            target_database = extract_database_from_sql(sql)
+
+        resolved: str | None = None
+        if not target_database or target_database.lower() == "mysql":
+            resolved = detect_table_database(sql, cfg, cursor)
+
+        if target_database and target_database.lower() == "mysql":
+            if resolved and resolved.lower() != "mysql":
+                logger.warning(
+                    "SQL references schema mysql but information_schema resolves table(s) to %r; "
+                    "using that database instead.",
+                    resolved,
+                )
+                target_database = resolved
+
+        if not target_database:
+            target_database = resolved
+            if target_database:
+                logger.debug("Resolved default database from metadata: %s", target_database)
+
+        if not target_database:
+            target_database = cfg.database
+            logger.debug("Using default database %r from config", target_database)
+
+        logger.debug("Executing SQL in database %r: %s...", target_database, sql[:100])
         cursor.execute(f"USE `{target_database}`")
-        
-        # Normalize SQL: remove database prefix if present since we've already switched
-        # This handles cases where SQL has "database.table" but we're now in that database
+
         normalized_sql = sql
         if target_database:
-            # Remove database prefix from table references
-            import re
-            # Pattern: database.table or `database`.`table`
-            # Remove the target database prefix
-            pattern = rf'`?{re.escape(target_database)}`?\.'
-            normalized_sql = re.sub(pattern, '', sql, flags=re.IGNORECASE)
-            
-            # CRITICAL: Also remove mysql. prefix if we're switching to a different database
-            # This handles the case where agent generates mysql.beer_reviews_flat incorrectly
-            if target_database.lower() != 'mysql':
-                # Remove mysql. prefix from table references (but keep mysql.slow_log queries)
-                # Only remove if the table after mysql. is known to be in another database
-                mysql_pattern = r'mysql\.`?(\w+)`?'
-                matches = list(re.finditer(mysql_pattern, normalized_sql, re.IGNORECASE))
-                for match in matches:
-                    table_name = match.group(1).lower()
-                    # Check if this table is known to be in a different database
-                    if table_name in ['beer_reviews_flat', 'beer_reviews_small']:
-                        # Remove the mysql. prefix
+            pattern = rf"`?{re.escape(target_database)}`?\."
+            normalized_sql = re.sub(pattern, "", sql, flags=re.IGNORECASE)
+            if target_database.lower() != "mysql":
+                mysql_pattern = r"mysql\.`?(\w+)`?"
+                for match in list(re.finditer(mysql_pattern, normalized_sql, re.IGNORECASE)):
+                    tbl = match.group(1)
+                    if not _table_exists_in_schema(cursor, "mysql", tbl):
                         normalized_sql = re.sub(
-                            rf'mysql\.`?{re.escape(match.group(1))}`?',
-                            match.group(1),
+                            rf"mysql\.`?{re.escape(tbl)}`?",
+                            tbl,
                             normalized_sql,
-                            flags=re.IGNORECASE
+                            flags=re.IGNORECASE,
                         )
-        
-        logger.debug(f"Normalized SQL: {normalized_sql[:100]}...")
+
+        logger.debug("Normalized SQL: %s...", normalized_sql[:100])
         cursor.execute(normalized_sql)
 
         rows = cursor.fetchmany(size=max_rows)

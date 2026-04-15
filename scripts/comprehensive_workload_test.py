@@ -10,6 +10,8 @@ Usage:
     python comprehensive_workload_test.py --duration 300
     python comprehensive_workload_test.py --duration 600 --intensity high
     python comprehensive_workload_test.py --duration 120 --scenarios lock,write,io
+
+Defaults to schema ``test`` (see ``--database``). Host, user, and password still come from ``.env``.
 """
 
 import argparse
@@ -19,6 +21,7 @@ import random
 import sys
 import time
 import threading
+from dataclasses import replace
 from pathlib import Path
 from typing import List, Optional, Set
 from collections import defaultdict
@@ -735,6 +738,14 @@ def main():
         help="Comma-separated list of scenarios to run (lock,long,io,write,memory,connections,mixed,metadata). "
              "If not specified, all scenarios run."
     )
+    parser.add_argument(
+        "--database",
+        type=str,
+        default="test",
+        metavar="SCHEMA",
+        help="Database/schema for workload tables and connections (default: test). "
+             "Overrides DB_DATABASE for this script only.",
+    )
     
     args = parser.parse_args()
     
@@ -743,8 +754,14 @@ def main():
         config = DBConfig.from_env()
     except Exception as e:
         logger.error(f"Failed to load database config: {e}")
-        logger.error("Make sure .env file exists with DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_DATABASE")
+        logger.error(
+            "Make sure .env file exists with DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_DATABASE "
+            "(DB_DATABASE may be a placeholder if you use --database)."
+        )
         return 1
+    
+    config = replace(config, database=args.database)
+    logger.info("Workload schema: %s", args.database)
     
     # Parse enabled scenarios
     enabled_scenarios = None

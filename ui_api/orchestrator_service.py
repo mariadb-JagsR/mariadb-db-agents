@@ -21,6 +21,68 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _format_run_error(exc: Exception) -> str:
+    """
+    Convert internal exceptions into actionable, source-specific UI errors.
+    """
+    raw = str(exc).strip() or exc.__class__.__name__
+    normalized = raw.lower()
+
+    db_markers = (
+        "mysql",
+        "mariadb",
+        "can't connect to mysql",
+        "access denied for user",
+        "unknown database",
+        "bad handshake",
+        "ssl",
+        "certificate verify failed",
+        "1045",
+        "2003",
+        "2005",
+    )
+    if any(marker in normalized for marker in db_markers):
+        return (
+            "Database connection failed. Verify DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_DATABASE "
+            "and SkySQL SSL settings. "
+            f"(details: {raw})"
+        )
+
+    openai_auth_markers = (
+        "invalid api key",
+        "incorrect api key",
+        "authentication",
+        "unauthorized",
+        "401",
+        "insufficient_quota",
+        "quota",
+    )
+    if any(marker in normalized for marker in openai_auth_markers):
+        return (
+            "OpenAI API authentication/usage failed. Check OPENAI_API_KEY, model access, and quota/billing. "
+            f"(details: {raw})"
+        )
+
+    openai_connectivity_markers = (
+        "connection error",
+        "apiconnectionerror",
+        "request timed out",
+        "timed out",
+        "temporary failure in name resolution",
+        "name or service not known",
+        "dns",
+        "ssl: certificate",
+    )
+    if any(marker in normalized for marker in openai_connectivity_markers):
+        return (
+            "OpenAI API connectivity failed (not the database connection). "
+            "Check internet/proxy/firewall/VPN and retry. "
+            f"(details: {raw})"
+        )
+
+    return f"Request failed: {raw}"
+
+
 def _record_run(run_payload: dict[str, Any]) -> None:
     state = load_json(RUN_HISTORY_PATH, {"runs": []})
     state["runs"].append(run_payload)
@@ -224,7 +286,7 @@ async def start_orchestrator_chat_run(
             await _set_run_state(run_id, status="completed", result=result)
             await _add_run_event(run_id, "Completed.")
         except Exception as exc:
-            await _set_run_state(run_id, status="failed", error=str(exc))
+            await _set_run_state(run_id, status="failed", error=_format_run_error(exc))
             await _add_run_event(run_id, "Failed.")
 
     asyncio.create_task(_runner())

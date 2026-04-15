@@ -2,7 +2,7 @@
 
 AI-powered agents that analyze, optimize, and troubleshoot MariaDB databases using natural language. Ask questions like "Is my database healthy?" or "Why are queries slow?" and get intelligent, actionable insights.
 
-[![MariaDB + MySQL DBA Recommender Demo (click to expand)](docs/media/dba-assist-demo.gif)](docs/media/dba-assist-demo.gif)
+[![MariaDB + MySQL Root-Cause Insight demo (click to expand)](docs/media/dba-assist-demo.gif)](docs/media/dba-assist-demo.gif)
 
 ## Overview
 
