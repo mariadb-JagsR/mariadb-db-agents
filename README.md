@@ -47,6 +47,8 @@ In the UI, try:
 - "Analyze slow queries from the last hour"
 - "What queries are running right now?"
 
+To re-record the README demo animation after UI changes, install UI dev dependencies and run `npm run capture-readme-demo` from `ui_web` (requires `ffmpeg` on your PATH, Playwright’s Chromium via `npx playwright install chromium`, and either free ports `8000`/`5173` or an already-running `./scripts/run_ui.sh`).
+
 **Need inspiration?** See [Sample DBA Questions](docs/SAMPLE_DBA_QUESTIONS.md).
 
 ### 2. Troubleshooting (UI Startup)
