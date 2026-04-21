@@ -1,41 +1,42 @@
 #!/bin/bash
-# Quick script to update .env file with new database credentials
+# Append or refresh DB_* lines in .env from environment variables.
+# Export secrets in your shell first — do not hard-code them in this file.
+#
+# Usage:
+#   export DB_HOST="your-host.example.com"
+#   export DB_PORT="3306"
+#   export DB_USER="your_user"
+#   export DB_PASSWORD="your_password"
+#   export DB_DATABASE="mysql"
+#   ./UPDATE_ENV.sh
 
+set -euo pipefail
 cd "$(dirname "$0")"
 
-# Backup existing .env
-if [ -f .env ]; then
-    cp .env .env.backup.$(date +%Y%m%d_%H%M%S)
-    echo "Backed up existing .env file"
-fi
+: "${DB_HOST:?Set DB_HOST}"
+: "${DB_PORT:?Set DB_PORT}"
+: "${DB_USER:?Set DB_USER}"
+: "${DB_PASSWORD:?Set DB_PASSWORD}"
+: "${DB_DATABASE:?Set DB_DATABASE}"
 
-# Update or add database configuration
-# Remove old DB_* lines and add new ones
 if [ -f .env ]; then
-    # Remove old DB configuration lines
+    cp .env ".env.backup.$(date +%Y%m%d_%H%M%S)"
+    echo "Backed up existing .env"
     sed -i.bak '/^DB_HOST=/d; /^DB_PORT=/d; /^DB_USER=/d; /^DB_PASSWORD=/d; /^DB_DATABASE=/d' .env
     rm -f .env.bak
 fi
 
-# Add new database configuration
-cat >> .env << 'EOF'
+{
+    echo ""
+    echo "# Database configuration (from UPDATE_ENV.sh — $(date -u +%Y-%m-%dT%H:%MZ))"
+    echo "DB_HOST=${DB_HOST}"
+    echo "DB_PORT=${DB_PORT}"
+    echo "DB_USER=${DB_USER}"
+    echo "DB_PASSWORD=${DB_PASSWORD}"
+    echo "DB_DATABASE=${DB_DATABASE}"
+} >> .env
 
-# Database Configuration (Updated)
-DB_HOST=dbpgp29990659.sysp0000.db2.skysql.com
-DB_PORT=3306
-DB_USER=dbpgp29990659
-DB_PASSWORD=aMWXUTkE3FYX!5rqCr3Lspghe
-DB_DATABASE=mysql
-EOF
-
-echo "✅ Updated .env file with new database credentials"
-echo ""
-echo "New configuration:"
-echo "  Host: dbpgp29990659.sysp0000.db2.skysql.com"
-echo "  User: dbpgp29990659"
-echo "  SSL: Enabled with certificate verification"
-echo ""
-echo "Test connection with:"
-echo "  python -c \"from common.config import DBConfig; from common.db_client import run_readonly_query; cfg = DBConfig.from_env(); result = run_readonly_query('SELECT 1 as test'); print('✅ Connection successful!', result)\""
-
-
+echo "Updated .env DB_* keys (password not printed)."
+echo "  Host: ${DB_HOST}"
+echo "  User: ${DB_USER}"
+echo "  SSL: enabled for SkySQL hosts (see db_client)"

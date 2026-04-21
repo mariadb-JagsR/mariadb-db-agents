@@ -13,8 +13,8 @@ This guide explains how to test the SkySQL API error log integration.
 
 2. **Service ID**: 
    - You need a SkySQL service ID to test with
-   - You can find it in the SkySQL portal or from your database hostname
-   - Example: `dbpgp29990659` (from hostname `dbpgp29990659.sysp0000.db2.skysql.com`)
+   - You can find it in the SkySQL portal or derive it from your database hostname (often the leading segment before the first `.` in the SkySQL host)
+   - Example: if your host is `myservice.sysp0000.db2.skysql.com`, the service id is often `myservice`
 
 3. **Optional Configuration**:
    ```bash
@@ -72,7 +72,7 @@ Test 1: SkySQL API Configuration
 Test 2: SkySQL API Connection
 ================================================================================
 
-Service ID: dbpgp29990659
+Service ID: <your_service_id>
 Time range: 2025-12-22T12:00:00Z to 2025-12-23T12:00:00Z
 
 Fetching log info...

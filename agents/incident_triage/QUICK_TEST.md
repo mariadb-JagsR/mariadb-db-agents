@@ -26,7 +26,7 @@ python -m agents.incident_triage.main
 ## Testing with Error Log
 
 ```bash
-python -m cli.main incident-triage --error-log-path ~/Downloads/dbpgf05851876_jags-dont-delete-smalldb-mdb-ms-0_error-log_2025-12-16.log
+python -m cli.main incident-triage --error-log-path /path/to/your/error.log
 ```
 
 ## Testing with Problem Scenarios

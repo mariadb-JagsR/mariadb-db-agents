@@ -4,13 +4,13 @@
 2025-01-XX
 
 ## Test Files
-1. `dbpbp27415244_nachiket-bahekar-mdw7-mdb-ms-0_error-log_2025-12-17.log` (12KB, 109 lines)
-2. `dbpbp35498420_nachiket-bahekar-zjtx-mdb-ms-0_error-log_2025-12-17.log` (10KB)
-3. `dbpgf05851876_jags-dont-delete-smalldb-mdb-ms-0_error-log_2025-12-16.log` (4.9KB, 22 occurrences)
+1. `sample-a_error-log_2025-12-17.log` (12KB, 109 lines)
+2. `sample-b_error-log_2025-12-17.log` (10KB)
+3. `sample-c_error-log_2025-12-16.log` (4.9KB, 22 occurrences)
 
 ## Test Results Summary
 
-### File 1: dbpbp27415244 (mdw7)
+### File 1: sample-a (cluster mdw7)
 - **Total patterns found:** 30
 - **Total occurrences:** 74
 - **Severity breakdown:**
@@ -23,7 +23,7 @@
 - ✅ WARNING: Timeout waiting for reply of binlog (semi-sync timeout) (2 occurrences)
 - ✅ INFO: Various InnoDB initialization messages (correctly grouped)
 
-### File 2: dbpbp35498420 (zjtx)
+### File 2: sample-b (cluster zjtx)
 - **Total patterns found:** 20
 - **Total occurrences:** 53
 - **Severity breakdown:**
@@ -35,7 +35,7 @@
 - ✅ WARNING patterns correctly identified
 - ✅ INFO messages properly grouped
 
-### File 3: dbpgf05851876 (smalldb) - **Most Critical**
+### File 3: sample-c (smalldb) - **Most Critical**
 - **Total patterns found:** 20
 - **Total occurrences:** 22
 - **Severity breakdown:**

@@ -1,54 +1,33 @@
-# Update Database Configuration
+# Database configuration (SkySQL)
 
-## New Database Credentials
+## Set credentials in `.env`
 
-Update your `.env` file with these values:
-
-```bash
-DB_HOST=dbpgp29990659.sysp0000.db2.skysql.com
-DB_PORT=3306
-DB_USER=dbpgp29990659
-DB_PASSWORD=aMWXUTkE3FYX!5rqCr3Lspghe
-DB_DATABASE=mysql
-```
-
-## SSL Configuration
-
-The new database requires SSL with server certificate verification. The `db_client.py` has been updated to automatically:
-- Enable SSL for SkySQL hosts (detected by `skysql.com` in hostname)
-- Verify server certificates (`ssl_verify_cert=True`)
-- Verify server identity (`ssl_verify_identity=True`)
-
-## Quick Update Command
+Do not commit real passwords or hosts to the repository. Copy the template and edit locally:
 
 ```bash
 cd mariadb_db_agents
-cat >> .env << 'EOF'
-
-# New database (with SSL)
-DB_HOST=dbpgp29990659.sysp0000.db2.skysql.com
-DB_PORT=3306
-DB_USER=dbpgp29990659
-DB_PASSWORD=aMWXUTkE3FYX!5rqCr3Lspghe
-DB_DATABASE=mysql
-EOF
+cp .env.example .env
 ```
 
-Or manually edit `.env` and update the DB_* values.
+Set at least:
 
-## Test Connection
+- `DB_HOST` — your MariaDB/SkySQL hostname (often `*.skysql.com` for SkySQL)
+- `DB_PORT` — typically `3306`
+- `DB_USER` — database user
+- `DB_PASSWORD` — database password
+- `DB_DATABASE` — database name (often `mysql` for admin-style connections)
 
-After updating, test the connection:
+See the main [README.md](README.md) for optional SkySQL API variables (`SKYSQL_API_KEY`, etc.).
+
+## SSL (SkySQL)
+
+For SkySQL hosts, SSL with certificate verification is applied automatically when the hostname indicates SkySQL (see `common/db_client.py`). Other hosts keep the previous non-SSL behavior for local compatibility.
+
+## Test connection
 
 ```bash
-source ../.venv/bin/activate
-python -c "from common.config import DBConfig; from common.db_client import run_readonly_query; cfg = DBConfig.from_env(); result = run_readonly_query('SELECT 1 as test', database='mysql'); print('Connection successful!', result)"
+source ../.venv/bin/activate   # or your venv path
+python -c "from mariadb_db_agents.common.config import DBConfig; from mariadb_db_agents.common.db_client import run_readonly_query; DBConfig.from_env(); result = run_readonly_query('SELECT 1 as test', database='mysql'); print('Connection successful!', result)"
 ```
 
-## What Changed
-
-1. **SSL Support**: `db_client.py` now automatically enables SSL with certificate verification for SkySQL hosts
-2. **Certificate Verification**: Server certificates are now verified (matching `--ssl-verify-server-cert` behavior)
-3. **Backward Compatible**: Non-SkySQL hosts still use `ssl_disabled=True` for compatibility
-
-
+(Adjust the import path if you run from a layout where the package root differs.)
