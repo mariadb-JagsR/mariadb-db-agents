@@ -108,10 +108,10 @@ async function main() {
 
     const browser = await chromium.launch({ headless: true });
     const context = await browser.newContext({
-      viewport: { width: 1280, height: 720 },
+      viewport: { width: 1400, height: 800 },
       recordVideo: {
         dir: CACHE_DIR,
-        size: { width: 1280, height: 720 },
+        size: { width: 1400, height: 800 },
       },
     });
 
@@ -122,14 +122,33 @@ async function main() {
     // Let the UI settle after bootstrap (loading banner may flash).
     await sleep(1400);
 
-    await page.getByRole("button", { name: "config", exact: true }).click();
-    await sleep(1000);
-    await page.getByRole("button", { name: "profiles", exact: true }).click();
-    await sleep(1000);
-    await page.getByRole("button", { name: "agents", exact: true }).click();
-    await sleep(1000);
-    await page.getByRole("button", { name: "chat", exact: true }).click();
-    await sleep(1600);
+    // Stay on chat — show the AI actually working on real DBA questions
+    await page.waitForSelector(".composer textarea", { timeout: 15000 });
+    await sleep(1200);
+
+    async function askQuestion(question, waitMs) {
+      const ta = page.locator(".composer textarea");
+      await ta.click();
+      await ta.fill(question);
+      await sleep(800);
+      await page.keyboard.press("Control+Enter");
+      // Poll until Send button re-enables (agent finished)
+      const deadline = Date.now() + waitMs;
+      while (Date.now() < deadline) {
+        const disabled = await page.evaluate(() => {
+          const btn = [...document.querySelectorAll("button")].find(b => b.textContent.trim() === "Send");
+          return btn ? btn.disabled : false;
+        });
+        if (!disabled) break;
+        await sleep(1000);
+      }
+      await sleep(3500);
+    }
+
+    // Pause briefly so the chat view is clearly visible before first question
+    await sleep(2000);
+    await askQuestion("What queries are running right now?", 120000);
+    await askQuestion("Is my database healthy? Check performance, locks, and slow queries.", 180000);
 
     const video = page.video();
     await context.close();
@@ -146,7 +165,7 @@ async function main() {
       "-i",
       webmPath,
       "-vf",
-      "fps=8,scale=1200:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=128[p];[s1][p]paletteuse=dither=bayer:bayer_scale=3",
+      "fps=10,scale=1200:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=192[p];[s1][p]paletteuse=dither=bayer:bayer_scale=3",
       "-loop",
       "0",
       OUT_GIF,
