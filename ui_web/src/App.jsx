@@ -6,7 +6,9 @@ import mysqlLogo from "./assets/mysql-logo.svg";
 import mariadbLogo from "./assets/mariadb-logo.svg";
 
 const SIDEBAR_TABS = ["chat", "config", "profiles", "agents", "observability"];
-const APP_NAME = "MariaDB + MySQL Root-Cause Insight";
+const APP_NAME = "Operations Copilot — Read-only, evidence-backed DBA assist";
+const APP_BANNER_SUBLINE =
+  "Go beyond surface metrics—trace problems to real causes, validate with evidence, and get actionable next steps for performance, health, and incidents.";
 const SECRET_MASK = "********";
 const SECRET_CONFIG_KEYS = new Set(["OPENAI_API_KEY", "DB_PASSWORD", "SKYSQL_API_KEY"]);
 const AGENT_LABELS = {
@@ -335,11 +337,10 @@ export function App() {
     <div className="app-root">
       <header className="top-banner">
         <div className="top-banner-title">
-          <h1>{APP_NAME}</h1>
-          <p>
-            Go beyond surface metrics—trace problems to real causes, validate with evidence, and get
-            actionable next steps for performance, health, and incidents.
-          </p>
+          <div className="top-banner-headline">
+            <h1>{APP_NAME}</h1>
+          </div>
+          <p className="top-banner-subline">{APP_BANNER_SUBLINE}</p>
         </div>
         <div className="logo-strip">
           <img src={mysqlLogo} alt="MySQL logo" />
