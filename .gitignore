@@ -52,4 +52,7 @@ Thumbs.db
 ui_web/node_modules/
 ui_web/dist/
 
+# Local experiments / third-party skill evaluation
+vibe-dba-test/
+
 

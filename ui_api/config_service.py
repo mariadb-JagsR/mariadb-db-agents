@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from dotenv import dotenv_values
+from dotenv import dotenv_values, load_dotenv
 
 from .paths import ENV_PATH, PROFILES_PATH, SESSIONS_PATH, TOGGLES_PATH, UI_DATA_DIR
 from .schemas import AgentToggleState, CreateProfileRequest, DBProfile, SessionData, SessionMessage, UpdateProfileRequest
@@ -52,6 +52,9 @@ def update_env_values(values: dict[str, str]) -> None:
     temp = ENV_PATH.with_suffix(".env.tmp")
     temp.write_text(body, encoding="utf-8")
     temp.replace(ENV_PATH)
+    # `common.config` only runs load_dotenv() once at import. Keep this process in sync with the file
+    # so profile activation and Config "Save" apply without restarting the server.
+    load_dotenv(ENV_PATH, override=True)
 
 
 def get_env_values(redact_secrets: bool = True) -> dict[str, str]:

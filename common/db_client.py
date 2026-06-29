@@ -34,6 +34,11 @@ _IS_SKIP_SCHEMAS = ("information_schema", "performance_schema", "sys")
 # Unqualified identifiers that are not user tables (avoid bogus scans)
 _UNQUALIFIED_TABLE_SKIP = frozenset({"dual"})
 
+# LLMs often confuse the server product ("MariaDB") with a database name, or use `mariadb.*`
+# like `mysql.*`. Both need the same disambiguation as bogus `mysql.` except when the
+# connection default (DB_DATABASE) is intentionally a real database named e.g. `mariadb`.
+_VENDOR_SCHEMA_TOKENS = frozenset({"mysql", "mariadb"})
+
 
 def _table_exists_in_schema(cursor: Any, schema: str, table: str) -> bool:
     cursor.execute(
@@ -138,6 +143,12 @@ def _extract_mysql_prefixed_tables(sql: str) -> list[str]:
     )
 
 
+def _extract_mariadb_prefixed_tables(sql: str) -> list[str]:
+    return list(
+        dict.fromkeys(m.group(1) for m in re.finditer(r"\bmariadb\.`?(\w+)`?", sql, re.IGNORECASE))
+    )
+
+
 def _extract_unqualified_table_names(sql: str) -> list[str]:
     table_patterns = [
         r"FROM\s+(?!`?\w+`?\.)`?(\w+)`?(?:\s|$|,|WHERE|JOIN|LIMIT|ORDER|GROUP|HAVING)",
@@ -160,22 +171,26 @@ def _extract_unqualified_table_names(sql: str) -> list[str]:
 def detect_table_database(sql: str, cfg: DBConfig, cursor: Any) -> str | None:
     """
     Resolve a default database when SQL omits schema qualifiers or uses a wrong
-    ``mysql.`` prefix, using ``information_schema.TABLES``.
+    ``mysql.`` or ``mariadb.`` prefix, using ``information_schema.TABLES``.
 
     - Unqualified table names: intersect schemas that contain every table; if that set
       has one member (or preferred ``cfg.database`` disambiguates), return it.
-    - ``mysql.<table>`` where ``table`` is not in the ``mysql`` schema: same resolution
-      for those tables (typical LLM mistake).
+    - ``mysql.<table>`` / ``mariadb.<table>`` where the table is not in that system
+      schema: same resolution (typical LLM mistake — "MariaDB" is not a schema).
 
     Returns None when nothing needs resolution, tables are unknown, or resolution is ambiguous.
     """
     mysql_refs = _extract_mysql_prefixed_tables(sql)
+    mariadb_refs = _extract_mariadb_prefixed_tables(sql)
     existing_in_mysql = _tables_existing_in_schema(cursor, "mysql", mysql_refs)
-    existing_lower = {x.lower() for x in existing_in_mysql}
-    bogus_mysql = [t for t in mysql_refs if t.lower() not in existing_lower]
+    existing_in_mariadb = _tables_existing_in_schema(cursor, "mariadb", mariadb_refs)
+    el_mysql = {x.lower() for x in existing_in_mysql}
+    el_mariadb = {x.lower() for x in existing_in_mariadb}
+    bogus_mysql = [t for t in mysql_refs if t.lower() not in el_mysql]
+    bogus_mariadb = [t for t in mariadb_refs if t.lower() not in el_mariadb]
     unqualified = _extract_unqualified_table_names(sql)
 
-    candidates = list(dict.fromkeys([*bogus_mysql, *unqualified]))
+    candidates = list(dict.fromkeys([*bogus_mysql, *bogus_mariadb, *unqualified]))
     if not candidates:
         return None
     return _common_schema_for_tables(cursor, candidates, cfg.database)
@@ -266,17 +281,31 @@ def run_readonly_query(
             target_database = extract_database_from_sql(sql)
 
         resolved: str | None = None
-        if not target_database or target_database.lower() == "mysql":
+        if not target_database or target_database.lower() in _VENDOR_SCHEMA_TOKENS:
             resolved = detect_table_database(sql, cfg, cursor)
 
-        if target_database and target_database.lower() == "mysql":
-            if resolved and resolved.lower() != "mysql":
+        if target_database and target_database.lower() in _VENDOR_SCHEMA_TOKENS:
+            if resolved and resolved.lower() != target_database.lower():
                 logger.warning(
-                    "SQL references schema mysql but information_schema resolves table(s) to %r; "
+                    "SQL references schema %r but information_schema resolves table(s) to %r; "
                     "using that database instead.",
+                    target_database,
                     resolved,
                 )
                 target_database = resolved
+
+        if (
+            target_database
+            and target_database.lower() == "mariadb"
+            and not resolved
+            and cfg.database.lower() != "mariadb"
+        ):
+            logger.warning(
+                "Ignoring mistaken schema name 'mariadb' (not in information_schema as intended catalog); "
+                "using DB_DATABASE %r",
+                cfg.database,
+            )
+            target_database = None
 
         if not target_database:
             target_database = resolved
@@ -301,6 +330,17 @@ def run_readonly_query(
                     if not _table_exists_in_schema(cursor, "mysql", tbl):
                         normalized_sql = re.sub(
                             rf"mysql\.`?{re.escape(tbl)}`?",
+                            tbl,
+                            normalized_sql,
+                            flags=re.IGNORECASE,
+                        )
+            if target_database.lower() != "mariadb":
+                mariadb_pattern = r"mariadb\.`?(\w+)`?"
+                for match in list(re.finditer(mariadb_pattern, normalized_sql, re.IGNORECASE)):
+                    tbl = match.group(1)
+                    if not _table_exists_in_schema(cursor, "mariadb", tbl):
+                        normalized_sql = re.sub(
+                            rf"mariadb\.`?{re.escape(tbl)}`?",
                             tbl,
                             normalized_sql,
                             flags=re.IGNORECASE,

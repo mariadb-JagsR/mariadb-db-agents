@@ -1,9 +1,17 @@
 # src/common/config.py
 from dataclasses import dataclass
 import os
+from pathlib import Path
+
 from dotenv import load_dotenv
 
-load_dotenv()
+# Always load the package's .env (mariadb_db_agents/.env), not the shell cwd — otherwise
+# DB_DATABASE and other values look "stuck" when the API/CLI is started from a parent path.
+_ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
+if _ENV_FILE.is_file():
+    load_dotenv(_ENV_FILE)
+else:
+    load_dotenv()
 
 
 @dataclass
@@ -46,6 +54,11 @@ class DBConfig:
 
         if missing:
             raise RuntimeError(f"Missing DB config env vars: {', '.join(missing)}")
+
+        # Strip so CRLF/accidental spaces in .env or shell exports don't break DNS (2005)
+        host = host.strip()
+        user = user.strip()
+        database = database.strip()
 
         return cls(
             host=host,

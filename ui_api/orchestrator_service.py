@@ -30,7 +30,6 @@ def _format_run_error(exc: Exception) -> str:
 
     db_markers = (
         "mysql",
-        "mariadb",
         "can't connect to mysql",
         "access denied for user",
         "unknown database",

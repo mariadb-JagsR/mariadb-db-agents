@@ -76,6 +76,22 @@ def test_detect_bogus_mysql_prefix_single_schema():
     assert len(cur.executed) == 2
 
 
+def test_detect_bogus_mariadb_prefix_single_schema():
+    cur = _QueuedCursor(
+        fetchall_queue=[
+            [],  # no such table in schema mariadb
+            [{"TABLE_NAME": "mytab", "TABLE_SCHEMA": "app"}],
+        ]
+    )
+    out = detect_table_database(
+        "SELECT * FROM mariadb.mytab WHERE id = 1",
+        _cfg("other"),
+        cur,
+    )
+    assert out == "app"
+    assert len(cur.executed) == 2
+
+
 def test_detect_unqualified_single_table():
     """No mysql refs → only the batched IS query."""
     cur = _QueuedCursor(
