@@ -36,7 +36,7 @@ python -m mariadb_db_agents.orchestrator.main "What queries are running right no
 
 ## Example Questions
 
-**Need more examples?** See [Sample DBA Questions](../../docs/SAMPLE_DBA_QUESTIONS.md) for comprehensive examples including complex root cause analysis scenarios.
+**Need more examples?** See [Sample DBA Questions](../docs/SAMPLE_DBA_QUESTIONS.md) for comprehensive examples including complex root cause analysis scenarios.
 
 ### Example 1: Health Check
 
@@ -83,7 +83,10 @@ The orchestrator can route to:
 5. **Database Inspector Agent** - Execute read-only SQL queries for investigation
 
 The orchestrator also has direct access to:
-- **SkySQL Observability Tool** - Get CPU% and disk utilization metrics (not accessible via SQL)
+- **MariaDB Cloud Observability Snapshot** - Current CPU/disk/thread signals plus curated
+  historical summaries when a time window is requested
+- **MariaDB Cloud Metrics Query** - Instant or range PromQL for targeted historical
+  investigation
 
 More agents will be added as they are implemented.
 
@@ -96,6 +99,9 @@ The orchestrator uses LLM-based intent classification to route queries:
 - **"replication"** / **"replica lag"** / **"replication health"** → Replication Health Agent
 - **"execute SQL"** / **"query database"** / **"check information_schema"** → Database Inspector Agent
 - **"health check"** / **"something's wrong"** → Incident Triage Agent
+- **"metrics over the last N hours"** / **"was this sustained?"** → MariaDB Cloud
+  snapshot/history tool
+- **"query this PromQL metric"** → MariaDB Cloud custom metrics query
 - **"is my database healthy?"** → Incident Triage + Running Query
 - **"why is it slow?"** → Incident Triage → (Slow Query or Running Query based on findings)
 
@@ -143,9 +149,17 @@ Database connection is configured via environment variables:
 OpenAI API key is configured via:
 - `OPENAI_API_KEY`
 
-For SkySQL error log access and observability metrics:
-- `SKYSQL_API_KEY` - SkySQL API key for error logs and observability API
-- `SKYSQL_SERVICE_ID` - SkySQL service ID (used for error logs and observability)
+For MariaDB Cloud error log access and observability metrics:
+- `MARIADB_CLOUD_API_KEY` - MariaDB Cloud API key for error logs and the observability API
+- `MARIADB_CLOUD_SERVICE_ID` - MariaDB Cloud service ID (used for error logs and observability)
+- `MARIADB_CLOUD_LOG_API_URL` - MariaDB Cloud log API URL
+
+The metrics integration automatically resolves the provisioning service name and
+observability region. CPU and disk utilisation are current snapshot signals; retained
+database metrics can be queried historically. Empty or unavailable series are reported as
+missing evidence, never interpreted as zero.
+
+See [`docs/MARIADB_CLOUD_OBSERVABILITY.md`](../docs/MARIADB_CLOUD_OBSERVABILITY.md).
 
 ## Architecture
 

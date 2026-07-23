@@ -167,7 +167,7 @@ async def perform_incident_triage(
     
     Args:
         error_log_path: Path to error log file (for local file access)
-        service_id: SkySQL service ID for API-based error log access
+        service_id: MariaDB Cloud service ID for API-based error log access
         max_error_patterns: Maximum number of error patterns to extract (default: 20)
         error_log_lines: Number of lines to read from error log tail (default: 5000)
         max_turns: Maximum number of agent turns/tool calls (default: 30)

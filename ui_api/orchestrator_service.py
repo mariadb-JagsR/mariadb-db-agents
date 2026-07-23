@@ -15,6 +15,7 @@ from .next_steps import extract_next_steps
 from .paths import RUN_HISTORY_PATH
 from .progress import reset_progress_callback, set_progress_callback
 from .store import load_json, save_json_atomic
+from . import streaming as sse_events
 
 
 def _now() -> datetime:
@@ -43,7 +44,7 @@ def _format_run_error(exc: Exception) -> str:
     if any(marker in normalized for marker in db_markers):
         return (
             "Database connection failed. Verify DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_DATABASE "
-            "and SkySQL SSL settings. "
+            "and MariaDB Cloud SSL settings. "
             f"(details: {raw})"
         )
 
@@ -294,4 +295,117 @@ async def start_orchestrator_chat_run(
 
 async def get_orchestrator_chat_run(run_id: str) -> dict[str, Any] | None:
     return await _get_run(run_id)
+
+
+async def stream_orchestrator_chat(
+    message: str,
+    max_turns: int,
+    session_id: str | None = None,
+):
+    """Yield SSE frames for one orchestrator turn, live.
+
+    Step 1 of the UI redesign (docs/UI_REDESIGN_PLAN.md): the streaming twin of
+    `_run_orchestrator_chat_internal`. It uses `Runner.run_streamed` instead of
+    `Runner.run` and re-emits the SDK's stream events as the SSE contract in
+    `streaming.py`. Session-append, run-history, and next-steps persistence are
+    reused verbatim so a streamed turn is durable exactly like a polled one.
+    """
+    try:
+        cfg = OpenAIConfig.from_env()
+        set_default_openai_key(cfg.api_key)
+        toggles = get_agent_toggles().model_dump()
+        enabled_tools = {name for name, enabled in toggles.items() if enabled}
+        effective_input = _build_prompt_with_history(session_id, message)
+
+        tracker = get_tracker()
+        agent = create_orchestrator_agent(enabled_tools=enabled_tools)
+
+        result = Runner.run_streamed(agent, effective_input, max_turns=max_turns)
+        tool_by_call: dict[str, str] = {}
+
+        async for event in result.stream_events():
+            etype = getattr(event, "type", None)
+
+            if etype == "raw_response_event":
+                delta = sse_events.text_delta(event)
+                if delta is not None:
+                    yield sse_events.sse("token", {"delta": delta})
+
+            elif etype == "run_item_stream_event":
+                name = getattr(event, "name", None)
+                item = getattr(event, "item", None)
+                if name == "tool_called":
+                    payload = sse_events.tool_call_payload(item)
+                    if payload.get("id"):
+                        tool_by_call[payload["id"]] = payload["tool"]
+                    yield sse_events.sse("tool_call", payload)
+                elif name == "tool_output":
+                    yield sse_events.sse(
+                        "tool_result", sse_events.tool_output_payload(item, tool_by_call)
+                    )
+                    card = sse_events.evidence_payload(item, tool_by_call)
+                    if card is not None:
+                        yield sse_events.sse("evidence", card)
+                elif name in ("handoff_occurred", "handoff_requested"):
+                    yield sse_events.sse("handoff", sse_events.handoff_payload(item))
+
+            elif etype == "agent_updated_stream_event":
+                to = getattr(getattr(event, "new_agent", None), "name", None)
+                if to:
+                    yield sse_events.sse("handoff", {"to": to})
+
+        # Stream complete — track metrics, persist the turn, emit usage + done.
+        metrics = tracker.track_interaction(
+            user_input=message, result=result, is_orchestrator=True
+        )
+        totals = metrics.get_total_with_sub_agents()
+        yield sse_events.sse(
+            "usage",
+            {
+                "round_trips": totals.get("total_round_trips"),
+                "tokens": totals.get("total_tokens"),
+                "by_agent": [
+                    {
+                        "agent": sub.get("agent_name", "unknown"),
+                        "round_trips": sub.get("llm_round_trips", 0),
+                        "tokens": sub.get("total_tokens", 0),
+                    }
+                    for sub in metrics.sub_agent_metrics
+                ],
+            },
+        )
+
+        created_at = _now()
+        response_text = result.final_output or "No output generated."
+        next_steps = extract_next_steps(response_text)
+        resolved_session_id = session_id or str(uuid.uuid4())
+        run_id = str(uuid.uuid4())
+
+        append_session_message(resolved_session_id, "user", message, title=message[:60])
+        append_session_message(resolved_session_id, "assistant", response_text)
+        _record_run(
+            {
+                "run_id": run_id,
+                "session_id": resolved_session_id,
+                "created_at": created_at.isoformat(),
+                "message": message[:500],
+                "metrics": totals,
+                "next_steps": next_steps,
+                "tool_toggles": toggles,
+            }
+        )
+
+        yield sse_events.sse(
+            "done",
+            {
+                "final": response_text,
+                "session_id": resolved_session_id,
+                "run_id": run_id,
+                "next_steps": next_steps,
+                "metrics": totals,
+                "created_at": created_at.isoformat(),
+            },
+        )
+    except Exception as exc:  # surfaced to the client as a terminal SSE error frame
+        yield sse_events.sse("error", {"message": _format_run_error(exc)})
 

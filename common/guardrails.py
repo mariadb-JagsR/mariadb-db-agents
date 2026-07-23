@@ -192,7 +192,7 @@ async def validate_output_guardrail(
         r"api[_-]?key\s*[:=]\s*[a-z0-9]{20,}",  # Long API key (likely real)
         r"secret\s*[:=]\s*[a-z0-9]{20,}",  # Long secret (likely real)
         r"token\s*[:=]\s*[a-z0-9]{20,}",  # Long token (likely real)
-        r"skysql\.\d+\.\w+\.\w+",  # SkySQL API key format (actual key)
+        r"skysql\.\d+\.\w+\.\w+",  # MariaDB Cloud API key format retains the skysql. prefix
     ]
     
     # Patterns that indicate examples/documentation (should be allowed)

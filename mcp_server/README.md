@@ -127,9 +127,9 @@ The MCP server uses the same environment variables as the CLI:
 - `DB_USER`: Read-only database user (required)
 - `DB_PASSWORD`: Database password (required)
 - `DB_DATABASE`: Database name (required)
-- `SKYSQL_API_KEY`: (Optional) SkySQL API key for error log access
-- `SKYSQL_SERVICE_ID`: (Optional) SkySQL service ID for error log access
-- `SKYSQL_LOG_API_URL`: (Optional) SkySQL log API URL
+- `MARIADB_CLOUD_API_KEY`: (Optional) MariaDB Cloud API key for error log access
+- `MARIADB_CLOUD_SERVICE_ID`: (Optional) MariaDB Cloud service ID for error log access
+- `MARIADB_CLOUD_LOG_API_URL`: (Optional) MariaDB Cloud log API URL
 
 ## Usage
 

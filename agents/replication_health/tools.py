@@ -54,25 +54,25 @@ def get_all_replica_status(
     max_executions: int = 10,
 ) -> dict[str, Any]:
     """
-    Get replication status from all replicas in a SkySQL service.
+    Get replication status from all replicas in a MariaDB Cloud service.
     
     This function works around MaxScale load balancing by executing
     SHOW ALL SLAVES STATUS multiple times. Each execution may be
     routed to a different replica by MaxScale's round-robin algorithm.
     
-    In SkySQL, there can be a maximum of 5 replicas, so executing
+    In MariaDB Cloud, there can be a maximum of 5 replicas, so executing
     10 times ensures we discover all replicas.
     
     Args:
         max_executions: Number of times to execute the query (default: 10)
-                       This should be sufficient for SkySQL's max of 5 replicas
+                       This should be sufficient for MariaDB Cloud's max of 5 replicas
     
     Returns:
         Dictionary with:
         - 'replicas': List of replica status dictionaries (one per unique replica)
         - 'count': Number of unique replicas found
         - 'executions': Number of times query was executed
-        - 'max_expected': Maximum expected replicas (5 for SkySQL)
+        - 'max_expected': Maximum expected replicas (5 for MariaDB Cloud)
         - 'note': Information about the approach used
     """
     import mysql.connector
@@ -80,13 +80,13 @@ def get_all_replica_status(
     
     cfg = DBConfig.from_env()
     
-    # Check if this is a SkySQL environment
-    is_skysql = 'skysql.com' in cfg.host.lower()
+    # MariaDB Cloud database hostnames still use the skysql.com domain.
+    is_mariadb_cloud = 'skysql.com' in cfg.host.lower()
     
     all_results = []
     seen_replicas = {}  # Keyed by unique identifier
     
-    # For SkySQL/MaxScale: We need to create separate connections for each execution
+    # For MariaDB Cloud/MaxScale, create a separate connection for each execution.
     # to ensure MaxScale routes each to a different server (master or replica)
     # We only collect results when connected to the master (read_only=OFF)
     
@@ -198,18 +198,18 @@ def get_all_replica_status(
     # Note: We don't need a finally block here since we close connections in the loop
     
     # Detect if we're only hitting master (possible high lag scenario)
-    only_master_hits = is_skysql and total_executions > 0 and master_hits == total_executions and len(seen_replicas) == 0
+    only_master_hits = is_mariadb_cloud and total_executions > 0 and master_hits == total_executions and len(seen_replicas) == 0
     
     # Detect if we only hit replicas (couldn't reach master)
-    only_replica_hits = is_skysql and total_executions > 0 and replica_hits == total_executions and master_hits == 0
+    only_replica_hits = is_mariadb_cloud and total_executions > 0 and replica_hits == total_executions and master_hits == 0
     
     note = (
         f"Executed SHOW ALL SLAVES STATUS {total_executions} times via MaxScale round-robin (requested {max_executions}). "
         f"Only collected results when connected to master (read_only=OFF, log_bin=ON). "
-        f"Found {len(seen_replicas)} unique replica connection(s) (SkySQL max: 5 replicas). "
+        f"Found {len(seen_replicas)} unique replica connection(s) (MariaDB Cloud max: 5 replicas). "
     )
     
-    if is_skysql:
+    if is_mariadb_cloud:
         note += (
             "MaxScale round-robin routes queries to both master and replicas. "
             "We filter to only collect results from master connections to avoid duplicates. "
@@ -236,20 +236,20 @@ def get_all_replica_status(
         elif total_executions > 0:
             note += f"Server routing: {master_hits} master hits, {replica_hits} replica hits out of {total_executions} executions."
     else:
-        note += "Note: Non-SkySQL environment - results may vary."
+        note += "Note: Non-MariaDB Cloud environment - results may vary."
     
     return {
         "replicas": list(seen_replicas.values()),
         "count": len(seen_replicas),
         "executions": max_executions,
-        "max_expected": 5,  # SkySQL maximum
+        "max_expected": 5,  # MariaDB Cloud maximum
         "note": note,
         "routing_info": {
             "total_executions": total_executions,
             "master_hits": master_hits,
             "replica_hits": replica_hits,
-            "only_master_hits": only_master_hits if is_skysql else False,
-        } if is_skysql else None,
+            "only_master_hits": only_master_hits if is_mariadb_cloud else False,
+        } if is_mariadb_cloud else None,
     }
 
 
@@ -258,7 +258,7 @@ def get_master_status() -> dict[str, Any]:
     """
     Get master/replication source status.
     
-    In SkySQL/MaxScale environment, this will hit the primary server.
+    In a MariaDB Cloud/MaxScale environment, this will hit the primary server.
     Returns binlog position, file, and GTID information.
     
     Returns:

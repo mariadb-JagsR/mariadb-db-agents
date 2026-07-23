@@ -8,9 +8,10 @@ The Incident Triage Agent is designed to quickly identify what's wrong with a da
 
 - **Health Snapshot**: Gathers a minimal "golden snapshot" of critical health metrics
 - **Performance Schema Integration**: Uses `performance_schema` and `information_schema` tables directly for real-time metrics (when available)
-- **SkySQL Observability**: Fetches CPU% and disk utilization metrics from SkySQL Observability API (not accessible via SQL)
+- **MariaDB Cloud Observability**: Combines current CPU/disk signals with supported
+  historical thread, query, lock, availability, and replication trends
 - **Symptom Correlation**: Identifies top 2-3 likely causes based on health metrics
-- **Error Log Analysis**: Reads and analyzes error logs with intelligent pattern extraction (supports local files and SkySQL API)
+- **Error Log Analysis**: Reads and analyzes error logs with intelligent pattern extraction (supports local files and the MariaDB Cloud API)
 - **Prioritized Checklist**: Provides immediate checks, safe mitigations, and what NOT to do
 - **Conservative Reporting**: Only reports actual problems, not normal operations
 
@@ -37,13 +38,13 @@ The agent supports two methods for accessing error logs:
    ```bash
    mariadb-db-agents incident-triage --error-log-path /var/log/mysql/error.log
    ```
-   **Priority**: If `--error-log-path` is provided, the agent reads only from that file (not from SkySQL API).
+   **Priority**: If `--error-log-path` is provided, the agent reads only from that file (not from the MariaDB Cloud API).
 
-2. **SkySQL API** (for production):
+2. **MariaDB Cloud API** (for production):
    ```bash
    mariadb-db-agents incident-triage
    ```
-   Automatically uses SkySQL API if `SKYSQL_API_KEY` and `SKYSQL_SERVICE_ID` are set in environment.
+   Automatically uses the MariaDB Cloud API if `MARIADB_CLOUD_API_KEY` and `MARIADB_CLOUD_SERVICE_ID` are set in the environment.
 
 ### Error Log Pattern Extraction
 
@@ -68,7 +69,7 @@ python -m mariadb_db_agents.cli.main incident-triage
 # With local error log file
 python -m mariadb_db_agents.cli.main incident-triage --error-log-path /var/log/mysql/error.log
 
-# With SkySQL service ID (requires API implementation)
+# With MariaDB Cloud service ID
 python -m mariadb_db_agents.cli.main incident-triage --service-id <service_id>
 
 # Customize error log analysis
@@ -99,8 +100,8 @@ The agent gathers a minimal set of critical health indicators:
 - Temporary table usage (memory vs disk)
 - Table lock waits
 - Buffer pool statistics (hit ratio, I/O)
-- **CPU usage** (SkySQL only, via Observability API)
-- **Disk utilization** (SkySQL only, via Observability API - data and logs volumes)
+- **CPU usage** (MariaDB Cloud only, via Observability API)
+- **Disk utilization** (MariaDB Cloud only, via Observability API - data and logs volumes)
 
 ### Lock & Transaction Health
 - InnoDB lock waits
@@ -143,17 +144,28 @@ The agent provides:
 The `tail_error_log_file` function in `common/db_client.py`:
 
 - **Local file access**: Implemented - reads from filesystem
-- **SkySQL API**: Fully implemented - fetches error logs from SkySQL Observability API
-- **Priority**: Explicit file paths take precedence over SkySQL API
+- **MariaDB Cloud API**: Fully implemented - fetches error logs from the MariaDB Cloud Observability API
+- **Priority**: Explicit file paths take precedence over the MariaDB Cloud API
 
-### SkySQL Observability Integration
+### MariaDB Cloud Observability Integration
 
-The agent can fetch CPU% and disk utilization metrics via `get_skysql_observability_snapshot()`:
+The agent uses `get_mariadb_cloud_observability_snapshot()` to add cloud evidence:
 
-- **Automatic region detection**: Fetches deployment region from SkySQL Provisioning API
-- **Metrics provided**: CPU usage, disk volume utilization (data/logs), threads, aborted connections
+- **Automatic region detection**: Fetches deployment region from the MariaDB Cloud Provisioning API
+- **Current metrics**: CPU usage, disk volume utilization (data/logs), service availability,
+  threads, and aborted connections
+- **Historical metrics**: Supported thread, query-counter, slow-query, table-lock,
+  replication-lag, and availability series over a requested window
+- **Bounded summaries**: Reports observed time bounds, point counts, min/max/average,
+  first/last values, and counter delta
+- **Missing-data semantics**: Unavailable history is identified explicitly rather than
+  treated as zero
 - **Threshold warnings**: Automatically flags high CPU (>85%) and disk usage (>90%)
 - **Integration**: Used in resource pressure analysis when available
+
+CPU and volume utilisation currently come from the live `/metrics` scrape and may not be
+retained by the historical backend. See
+[`docs/MARIADB_CLOUD_OBSERVABILITY.md`](../../docs/MARIADB_CLOUD_OBSERVABILITY.md).
 
 ### Pattern Extraction Algorithm
 
@@ -215,9 +227,8 @@ The agent suggests using other agents when deeper analysis is needed.
 
 ## Future Enhancements
 
-- Historical trend analysis (compare current state to baseline)
+- Baseline comparison and anomaly scoring across historical windows
 - Automated alerting based on health snapshot thresholds
 - Integration with monitoring systems (Prometheus, Grafana)
 - Agent composition (automatically call other agents for deeper analysis)
-- Historical observability metrics (currently snapshot-only)
 

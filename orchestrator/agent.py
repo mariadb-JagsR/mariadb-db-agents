@@ -12,7 +12,10 @@ from .tools import (
     check_replication_health,
     execute_database_query,
 )
-from ..common.observability_tools import get_skysql_observability_snapshot
+from ..common.observability_tools import (
+    get_mariadb_cloud_observability_snapshot,
+    query_mariadb_cloud_observability_metrics,
+)
 from ..common.guardrails import input_guardrail, output_guardrail
 
 
@@ -34,7 +37,8 @@ Tools:
 - check_replication_health(...)
 - perform_incident_triage(...)
 - execute_database_query(sql, ...)
-- get_skysql_observability_snapshot(...) - Get CPU%, disk utilization, and system metrics from SkySQL observability API (SkySQL only, not accessible via SQL)
+- get_mariadb_cloud_observability_snapshot(...) - Current CPU/disk/threads snapshot; pass hours=N for curated historical trends (MariaDB Cloud only)
+- query_mariadb_cloud_observability_metrics(query, hours=...) - Custom PromQL instant/range queries against MariaDB Cloud observability
 
 Operating modes (choose one per request; switch modes if evidence requires):
 - Realtime performance (slow now / blockers / load)
@@ -42,7 +46,7 @@ Operating modes (choose one per request; switch modes if evidence requires):
 - Incident triage (errors, outage, “something’s wrong”)
 - Replication/durability
 - Config/status inspection
-- Overall health report (use get_skysql_observability_snapshot for CPU/disk metrics on SkySQL)
+- Overall health report (use get_mariadb_cloud_observability_snapshot; set hours=1 or hours=24 for MariaDB Cloud trends)
 
 Method:
 1) Identify user intent + pick mode.
@@ -91,14 +95,14 @@ Available Specialized Agents:
 3. **Incident Triage Agent** (perform_incident_triage)
    - Purpose: Quick health check that identifies database issues and provides actionable checklists
    - Use when: User asks about health checks, "something's wrong", incidents, troubleshooting, "is everything ok"
-   - Parameters: error_log_path (local file), service_id (SkySQL API), max_error_patterns, error_log_lines, max_turns
+   - Parameters: error_log_path (local file), service_id (MariaDB Cloud API), max_error_patterns, error_log_lines, max_turns
    - Note: This is often a good starting point for comprehensive health checks
 
 4. **Replication Health Agent** (check_replication_health)
    - Purpose: Monitors replication lag across all replicas, detects failures, and provides recommendations
    - Use when: User asks about replication health, replication lag, replication status, replication failures
    - Parameters: max_executions (number of times to discover replicas, default: 10), max_turns (agent turns, default: 30)
-   - Note: Handles MaxScale load balancing automatically to discover all replicas (SkySQL max: 5 replicas)
+   - Note: Handles MaxScale load balancing automatically to discover all replicas (MariaDB Cloud max: 5 replicas)
 
 5. **Database Inspector Agent** (execute_database_query)
    - Purpose: Execute read-only SQL queries to investigate database state, check status/variables, explore schema
@@ -268,7 +272,8 @@ def create_orchestrator_agent(enabled_tools: set[str] | None = None) -> Agent:
         "perform_incident_triage": perform_incident_triage,
         "check_replication_health": check_replication_health,
         "execute_database_query": execute_database_query,
-        "get_skysql_observability_snapshot": get_skysql_observability_snapshot,
+        "get_mariadb_cloud_observability_snapshot": get_mariadb_cloud_observability_snapshot,
+        "query_mariadb_cloud_observability_metrics": query_mariadb_cloud_observability_metrics,
     }
     selected_tools = [
         tool

@@ -28,14 +28,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--error-log-path",
         type=str,
         default=None,
-        help="Path to error log file (for local file access). If not provided, will attempt SkySQL API if service_id is set.",
+        help="Path to an error log file. If omitted, uses the MariaDB Cloud API when service_id is set.",
     )
     parser.add_argument(
         "--service-id",
         type=str,
-        default=os.getenv("SKYSQL_SERVICE_ID"),
-        help="SkySQL service ID for API-based error log access (if not using local file). "
-             "Can also be set via SKYSQL_SERVICE_ID environment variable.",
+        default=os.getenv("MARIADB_CLOUD_SERVICE_ID"),
+        help="MariaDB Cloud service ID for API-based error log access. "
+             "Can also be set via MARIADB_CLOUD_SERVICE_ID.",
     )
     parser.add_argument(
         "--max-error-patterns",
@@ -70,7 +70,7 @@ async def run_agent_async(
 
     Args:
         error_log_path: Path to error log file (for local access)
-        service_id: SkySQL service ID (for API access)
+        service_id: MariaDB Cloud service ID (for API access)
         max_error_patterns: Maximum error patterns to extract
         error_log_lines: Lines to read from error log
         max_turns: Maximum number of agent turns/tool calls
@@ -96,7 +96,7 @@ async def run_agent_async(
     if error_log_path:
         user_prompt += f"\n\nError log is available at: {error_log_path}"
     elif service_id:
-        user_prompt += f"\n\nError log should be fetched via SkySQL API for service_id: {service_id}"
+        user_prompt += f"\n\nError log should be fetched via MariaDB Cloud API for service_id: {service_id}"
 
     # Run the agent
     result = await Runner.run(agent, user_prompt, max_turns=max_turns)

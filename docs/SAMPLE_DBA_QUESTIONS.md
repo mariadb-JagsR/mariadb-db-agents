@@ -21,6 +21,25 @@ This document provides example questions that demonstrate the capabilities of th
 - "Which queries are consuming the most resources right now?"
 - "Analyze slow queries from the last 3 hours and identify the top 5 patterns causing performance degradation"
 
+## MariaDB Cloud Metrics & History
+
+**Current cloud context:**
+
+- "Show MariaDB Cloud CPU and data/log disk utilization right now."
+- "Is the service up, and how many threads are connected versus running?"
+- "Correlate current CPU and disk pressure with active queries and lock waits."
+
+**Historical investigations:**
+
+- "Show connected and running thread trends over the last 6 hours. Was the pressure sustained?"
+- "Compare slow-query counter growth, table-lock waits, and query volume over the last 24 hours."
+- "Check replication lag history for the last 12 hours and correlate any spikes with query activity."
+- "Use MariaDB Cloud metrics to determine whether this incident is a short spike or a persistent regression."
+
+The agent reports when a requested series is not retained. CPU and volume utilization are
+currently strongest as live snapshot signals; supported database/exporter series can be
+queried through the historical metrics API.
+
 **Complex multi-part investigations:**
 
 - "My application is experiencing timeouts. 

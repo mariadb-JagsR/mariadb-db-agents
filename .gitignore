@@ -32,7 +32,7 @@ build/
 
 # Test data files
 *_test_*.json
-skysql_error_logs_*.json
+mariadb_cloud_error_logs_*.json
 
 # Conversation databases
 *.db

@@ -384,7 +384,7 @@ All agents should leverage:
 - Configuration analysis tools
 
 ### Integration Points
-- **SkySQL API**: For service metadata, connection info
+- **MariaDB Cloud API**: For service metadata, connection info
 - **Monitoring Stack**: For historical metrics and alerting
 - **Backup Systems**: For backup verification (if accessible)
 - **Log Aggregation**: For comprehensive log analysis

@@ -36,13 +36,13 @@ Use ONLY the tools provided:
 - get_replication_configuration: to get replication-related configuration variables
 - Do NOT invent data or run queries in your head; always use tools for DB data.
 
-**CRITICAL: In SkySQL/MaxScale environments:**
+**CRITICAL: In MariaDB Cloud/MaxScale environments:**
 - get_all_replica_status() executes SHOW ALL SLAVES STATUS multiple times with separate connections
 - MaxScale round-robin load balancing routes each execution to different servers (master OR replicas)
 - **IMPORTANT**: The tool only collects results when connected to the master (read_only=OFF, log_bin=ON)
 - When connected to a replica, SHOW ALL SLAVES STATUS is skipped (replicas don't show useful replica status)
 - This prevents duplicate/invalid results from replica connections
-- SkySQL has a maximum of 5 replicas
+- MariaDB Cloud has a maximum of 5 replicas
 - The tool uses Server_id + Master_Host + Master_Port + Connection_name to uniquely identify replica connections
 
 **HIGH REPLICATION LAG DETECTION:**
@@ -78,7 +78,7 @@ High-level behavior:
      * Current binlog file and position
      * Executed_Gtid_Set (if GTID enabled)
      * Binlog filters (Binlog_Do_DB, Binlog_Ignore_DB)
-   - **Note**: In SkySQL, `SHOW SLAVE HOSTS` / `SHOW REPLICA HOSTS` is not available due to privilege restrictions
+   - **Note**: In MariaDB Cloud, `SHOW SLAVE HOSTS` / `SHOW REPLICA HOSTS` is unavailable due to privilege restrictions
    - Use execute_sql("SHOW BINARY LOGS") to check binlog files and sizes
    - Replica information is gathered via get_all_replica_status() which uses SHOW ALL SLAVES STATUS
 
@@ -196,7 +196,7 @@ High-level behavior:
       - Compare with master to see if replication is the bottleneck
 
 7) Replication Topology Analysis
-   - **Note**: In SkySQL, `SHOW SLAVE HOSTS` / `SHOW REPLICA HOSTS` is not available
+   - **Note**: In MariaDB Cloud, `SHOW SLAVE HOSTS` / `SHOW REPLICA HOSTS` is unavailable
    - Replica topology is determined from get_all_replica_status() results
    - Each replica connection shows Master_Host/Source_Host, Master_Port/Source_Port
    - Map replication chain (if cascading replication exists) from replica status data
@@ -270,9 +270,9 @@ General rules:
 - NEVER execute any replication control commands (START SLAVE, STOP SLAVE, etc.) - only suggest them
 - Present all recommendations as suggestions with clear risk assessment
 - If replication is not configured, explain what's needed to enable it
-- **SkySQL-specific**: Do NOT attempt `SHOW SLAVE HOSTS` / `SHOW REPLICA HOSTS` - it requires REPLICATION MASTER ADMIN privilege which is not available
-- **SkySQL-specific**: If you need replica information, use get_all_replica_status() which handles MaxScale round-robin correctly
-- **SkySQL-specific**: If using information_schema.slave_status, note that it's subject to MaxScale round-robin and may return different results on each query
+- **MariaDB Cloud-specific**: Do NOT attempt `SHOW SLAVE HOSTS` / `SHOW REPLICA HOSTS` - it requires REPLICATION MASTER ADMIN privilege which is not available
+- **MariaDB Cloud-specific**: If you need replica information, use get_all_replica_status() which handles MaxScale round-robin correctly
+- **MariaDB Cloud-specific**: If using information_schema.slave_status, note that it is subject to MaxScale round-robin and may return different results on each query
 """
 
 

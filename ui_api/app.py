@@ -4,6 +4,7 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 
 from ..common.observability import get_tracker
 from .config_service import (
@@ -28,6 +29,7 @@ from .orchestrator_service import (
     get_orchestrator_chat_run,
     run_orchestrator_chat,
     start_orchestrator_chat_run,
+    stream_orchestrator_chat,
 )
 from .paths import RUN_HISTORY_PATH
 from .schemas import (
@@ -92,6 +94,26 @@ async def get_chat_orchestrator_run(run_id: str) -> dict[str, Any]:
     if run is None:
         raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
     return run
+
+
+@app.post("/chat/orchestrator/stream")
+async def stream_chat_orchestrator(request: ChatRequest) -> StreamingResponse:
+    """Stream one orchestrator turn as Server-Sent Events (token/tool_call/
+    handoff/evidence/usage/done). The poll endpoints above remain for the
+    current UI; this is the path the streaming UI consumes (UI_REDESIGN_PLAN.md)."""
+    return StreamingResponse(
+        stream_orchestrator_chat(
+            message=request.message,
+            max_turns=request.max_turns,
+            session_id=request.session_id,
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # defeat proxy buffering so tokens flush live
+        },
+    )
 
 
 @app.get("/config/status", response_model=EnvStatusResponse)

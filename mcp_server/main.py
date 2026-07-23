@@ -141,7 +141,7 @@ async def list_tools() -> list[Tool]:
                     },
                     "service_id": {
                         "type": "string",
-                        "description": "SkySQL service ID for API-based error log access",
+                        "description": "MariaDB Cloud service ID for API-based error log access",
                     },
                     "max_error_patterns": {
                         "type": "integer",

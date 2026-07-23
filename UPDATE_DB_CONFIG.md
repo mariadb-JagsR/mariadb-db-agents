@@ -1,4 +1,4 @@
-# Database configuration (SkySQL)
+# Database configuration (MariaDB Cloud)
 
 ## Set credentials in `.env`
 
@@ -11,17 +11,17 @@ cp .env.example .env
 
 Set at least:
 
-- `DB_HOST` — your MariaDB/SkySQL hostname (often `*.skysql.com` for SkySQL)
+- `DB_HOST` — your MariaDB Cloud hostname (often `*.skysql.com`; the service hostname retains the `skysql.com` domain)
 - `DB_PORT` — typically `3306`
 - `DB_USER` — database user
 - `DB_PASSWORD` — database password
 - `DB_DATABASE` — database name (often `mysql` for admin-style connections)
 
-See the main [README.md](README.md) for optional SkySQL API variables (`SKYSQL_API_KEY`, etc.).
+See the main [README.md](README.md) for optional MariaDB Cloud API variables (`MARIADB_CLOUD_API_KEY`, etc.).
 
-## SSL (SkySQL)
+## SSL (MariaDB Cloud)
 
-For SkySQL hosts, SSL with certificate verification is applied automatically when the hostname indicates SkySQL (see `common/db_client.py`). Other hosts keep the previous non-SSL behavior for local compatibility.
+For MariaDB Cloud hosts, SSL with certificate verification is applied automatically when the hostname matches the retained `skysql.com` service domain (see `common/db_client.py`). Other hosts keep the previous non-SSL behavior for local compatibility.
 
 ## Test connection
 

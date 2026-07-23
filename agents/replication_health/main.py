@@ -29,7 +29,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=int,
         default=10,
         help="Maximum number of times to execute SHOW ALL SLAVES STATUS to discover replicas (default: 10). "
-             "SkySQL has a maximum of 5 replicas, so 10 executions ensures coverage.",
+             "MariaDB Cloud has a maximum of 5 replicas, so 10 executions ensures coverage.",
     )
     parser.add_argument(
         "--max-turns",

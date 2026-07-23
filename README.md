@@ -14,6 +14,8 @@ AI-powered DBA assistance for MariaDB and MySQL. Ask questions in plain English 
 | Queries are slow and you don't know why | *"Analyze slow queries from the last hour"* |
 | A runaway query is blocking everyone | *"What queries are running right now?"* |
 | You suspect replication is lagging | *"Check replication health"* |
+| You need to know whether pressure is persistent or just a spike | *"Show connection and query trends over the last 6 hours"* |
+| You want cloud resource context alongside SQL evidence | *"Show MariaDB Cloud CPU and disk now, then correlate with database activity"* |
 | You need to investigate something specific | *"Show me the top tables by I/O in the last hour"* |
 
 ---
@@ -47,7 +49,7 @@ Here is an actual response to *"Can we get a comprehensive analysis on our DB �
 > 3. Separate synthetic `SLEEP()` workload from production slow-log analysis
 > 4. Re-check replication from a primary-routed admin connection
 >
-> *Full domain-by-domain breakdown (locking, slow queries, execution plans, connections, I/O, replication, SkySQL observability) available on request.*
+> *Full domain-by-domain breakdown (locking, slow queries, execution plans, connections, I/O, replication, MariaDB Cloud observability) available on request.*
 
 </details>
 
@@ -63,6 +65,7 @@ pip install -e .
 
 cp .env.example .env
 # Fill in DB_HOST, DB_USER, DB_PASSWORD, OPENAI_API_KEY
+# For MariaDB Cloud observability, also set MARIADB_CLOUD_API_KEY
 
 cd mariadb_db_agents
 ./scripts/run_ui.sh
@@ -98,10 +101,10 @@ python -m mariadb_db_agents.cli.main orchestrator --interactive
 
 | Agent | What it analyses |
 |-------|-----------------|
-| **Orchestrator** | Routes your question to the right specialist(s), synthesises the results |
+| **Orchestrator** | Routes questions, combines SQL/log evidence, and can query current or historical MariaDB Cloud metrics |
 | **Slow Query** | Historical slow queries — patterns, EXPLAIN plans, index suggestions |
 | **Running Query** | Live processlist — blocking queries, lock waits, current resource usage |
-| **Incident Triage** | Broad health snapshot — connections, locks, I/O, error logs, SkySQL observability |
+| **Incident Triage** | Broad health snapshot — connections, locks, I/O, error logs, current cloud resources, and supported metric trends |
 | **Replication Health** | Replica lag, broken chains, GTID state |
 | **Database Inspector** | Ad-hoc read-only SQL with AI interpretation of results |
 
@@ -116,14 +119,15 @@ All agents are **read-only**. Recommendations are suggestions only — nothing i
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `OPENAI_API_KEY` | Yes | OpenAI API key |
-| `OPENAI_MODEL` | No | Model to use (default: `gpt-4o`) |
+| `OPENAI_MODEL` | No | OpenAI model to use (code default: `gpt-5.2`) |
 | `DB_HOST` | Yes | MariaDB/MySQL host |
 | `DB_PORT` | No | Port (default: 3306) |
 | `DB_USER` | Yes | Read-only database user |
 | `DB_PASSWORD` | Yes | Database password |
 | `DB_DATABASE` | Yes | Default database |
-| `SKYSQL_API_KEY` | No | SkySQL API key — enables error logs and CPU/disk metrics |
-| `SKYSQL_SERVICE_ID` | No | SkySQL service ID |
+| `MARIADB_CLOUD_API_KEY` | No | MariaDB Cloud API key — enables error logs and CPU/disk metrics |
+| `MARIADB_CLOUD_SERVICE_ID` | No | MariaDB Cloud service ID |
+| `MARIADB_CLOUD_LOG_API_URL` | No | MariaDB Cloud Log API URL |
 
 ### Recommended DB user
 
@@ -139,20 +143,48 @@ GRANT SELECT, PROCESS, REPLICATION CLIENT ON *.* TO 'dba_readonly'@'%';
 ![Architecture](docs/DBA_Agent_architecture1.png)
 
 - **Orchestrator** routes to specialised agents and synthesises multi-agent results
-- **Common infrastructure** (`common/`) provides read-only DB access, guardrails, observability tracking, and SkySQL API integration
+- **Common infrastructure** (`common/`) provides read-only DB access, guardrails, observability tracking, and MariaDB Cloud API integration
 - **Each agent** follows the same structure: `agent.py` (prompt + tools), `tools.py` (@function_tool definitions), `main.py` (CLI entry), `conversation.py` (interactive mode)
 
 See [Architecture details](docs/ARCHITECTURE_DIAGRAM.md) for more.
 
 ---
 
-## SkySQL / MariaDB Cloud
+## MariaDB Cloud observability
 
-For SkySQL services the agents additionally fetch:
-- CPU % and disk utilisation via the SkySQL Observability API (not available via SQL)
-- Error logs via the SkySQL Log API
+The platform can enrich SQL analysis with MariaDB Cloud control-plane evidence that is not
+available from the database connection itself:
 
-Configure `SKYSQL_API_KEY` and `SKYSQL_SERVICE_ID` in `.env` to enable these.
+- **Current snapshot** — CPU, data/log disk utilisation, service availability, connected and
+  running threads, and aborted clients/connections.
+- **Historical trends** — PromQL range queries for supported time-series metrics such as
+  connected/running threads, query counters, slow-query counters, table-lock waits,
+  replication lag, and service availability.
+- **Custom PromQL** — the orchestrator can issue instant or range queries when a curated
+  metric is not enough.
+- **Error logs** — API-based archive discovery, bounded download, pattern grouping,
+  severity classification, and first/last-seen timestamps.
+- **Automatic targeting** — resolves the service name and observability region from the
+  MariaDB Cloud service metadata and database hostname.
+
+This lets the agent answer questions such as:
+
+> “Was connection pressure sustained during the last six hours, or is the current value
+> just a spike?”
+
+> “Show CPU and disk now, then compare query, slow-query, and replication-lag trends over
+> the last 24 hours.”
+
+Configure `MARIADB_CLOUD_API_KEY`, `MARIADB_CLOUD_SERVICE_ID`, and optionally
+`MARIADB_CLOUD_LOG_API_URL` in `.env`. The current API and database hostnames retain the
+`skysql.com` domain.
+
+Important: `/metrics` provides the current CPU and disk snapshot. Historical
+`/query_range` data is available only for series retained by the metrics backend; the agent
+reports unavailable series rather than inventing a trend.
+
+See [MariaDB Cloud observability and logs](docs/MARIADB_CLOUD_OBSERVABILITY.md) for
+supported metrics, examples, API behavior, and test commands.
 
 ---
 
@@ -161,6 +193,24 @@ Configure `SKYSQL_API_KEY` and `SKYSQL_SERVICE_ID` in `.env` to enable these.
 Planned agents: Connection Pool Analyser · Capacity Planning · Schema & Index Health · Lock & Deadlock Detective · Security Audit
 
 See [HIGH_VALUE_AUTOMATION_OPPORTUNITIES.md](docs/HIGH_VALUE_AUTOMATION_OPPORTUNITIES.md) for the full list.
+
+---
+
+## Tech stack
+
+| Layer | Technology |
+|-------|-----------|
+| **LLM framework** | [OpenAI Agents SDK](https://github.com/openai/openai-agents-python) (`openai-agents ≥ 0.6`) |
+| **LLM model** | Configurable OpenAI model via `OPENAI_MODEL` |
+| **Backend API** | [FastAPI](https://fastapi.tiangolo.com/) + [Uvicorn](https://www.uvicorn.org/) |
+| **Frontend** | [React 18](https://react.dev/) + [Vite 5](https://vitejs.dev/) |
+| **Markdown rendering** | [react-markdown](https://github.com/remarkjs/react-markdown) + remark-gfm |
+| **Database client** | [mysql-connector-python 9](https://dev.mysql.com/doc/connector-python/en/) |
+| **Config / secrets** | [python-dotenv](https://github.com/theskumar/python-dotenv) + Pydantic |
+| **IDE integration** | [MCP SDK](https://github.com/modelcontextprotocol/python-sdk) (Cursor, Windsurf, Claude Code) |
+| **UI theme** | MariaDB Cloud design language — dark teal-navy nav, blue accents, light card body |
+
+Full stack details and architectural notes: [docs/TECH_STACK.md](docs/TECH_STACK.md).
 
 ---
 

@@ -72,7 +72,8 @@ class AgentToggleState(BaseModel):
     perform_incident_triage: bool = True
     check_replication_health: bool = True
     execute_database_query: bool = True
-    get_skysql_observability_snapshot: bool = True
+    get_mariadb_cloud_observability_snapshot: bool = True
+    query_mariadb_cloud_observability_metrics: bool = True
 
 
 class AgentToggleResponse(BaseModel):

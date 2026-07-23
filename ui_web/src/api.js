@@ -30,9 +30,94 @@ async function request(path, options = {}) {
   return response.json();
 }
 
+function parseSseFrame(frame) {
+  let event = "message";
+  const dataLines = [];
+  for (const line of frame.split("\n")) {
+    if (line.startsWith("event:")) {
+      event = line.slice(6).trim();
+    } else if (line.startsWith("data:")) {
+      dataLines.push(line.slice(5).replace(/^ /, ""));
+    }
+  }
+  if (dataLines.length === 0) {
+    return null;
+  }
+  const raw = dataLines.join("\n");
+  let data = raw;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    /* keep the raw string if it isn't JSON */
+  }
+  return { event, data };
+}
+
+/**
+ * Stream one orchestrator turn over SSE, invoking onEvent(event, data) per frame.
+ * EventSource can't POST a body, so we read the fetch ReadableStream by hand and
+ * split on the SSE frame delimiter (a blank line).
+ */
+async function streamChat(payload, onEvent, signal) {
+  let response;
+  try {
+    response = await fetch(`${API_BASE}/chat/orchestrator/stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal
+    });
+  } catch (error) {
+    throw new Error(
+      `Cannot reach backend API at ${API_BASE}. ` +
+        "Make sure the FastAPI server is running (use ./scripts/run_ui.sh) and try again."
+    );
+  }
+
+  if (!response.ok || !response.body) {
+    let detail = "";
+    try {
+      const payloadJson = await response.json();
+      detail = payloadJson.detail || payloadJson.message || JSON.stringify(payloadJson);
+    } catch {
+      try {
+        detail = await response.text();
+      } catch {
+        detail = "";
+      }
+    }
+    throw new Error(
+      detail
+        ? `API ${response.status} (/chat/orchestrator/stream): ${detail}`
+        : `API ${response.status} (/chat/orchestrator/stream)`
+    );
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) {
+      break;
+    }
+    buffer += decoder.decode(value, { stream: true });
+    let sepIndex;
+    while ((sepIndex = buffer.indexOf("\n\n")) !== -1) {
+      const frame = buffer.slice(0, sepIndex);
+      buffer = buffer.slice(sepIndex + 2);
+      const parsed = parseSseFrame(frame);
+      if (parsed) {
+        onEvent(parsed.event, parsed.data);
+      }
+    }
+  }
+}
+
 export const api = {
   health: () => request("/health"),
   chat: (payload) => request("/chat/orchestrator", { method: "POST", body: JSON.stringify(payload) }),
+  streamChat,
   startChatRun: (payload) =>
     request("/chat/orchestrator/run", { method: "POST", body: JSON.stringify(payload) }),
   getChatRun: (runId) => request(`/chat/orchestrator/run/${runId}`),

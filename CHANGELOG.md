@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- MariaDB Cloud instant and historical PromQL support through the observability
+  `/query` and `/query_range` APIs
+- Curated metric history with bounded steps and first/last/min/max/average/delta summaries
+- Automatic MariaDB Cloud service-name and observability-region resolution
+- Dedicated current/history metrics and error-log integration scripts
+- Comprehensive MariaDB Cloud observability documentation and sample investigations
+
+### Changed
+- Renamed product-facing code, configuration, tools, UI labels, and documentation from
+  SkySQL to MariaDB Cloud
+- MariaDB Cloud configuration now uses `MARIADB_CLOUD_API_KEY`,
+  `MARIADB_CLOUD_SERVICE_ID`, and `MARIADB_CLOUD_LOG_API_URL`
+
 ## [0.1.0] - 2024-12-XX
 
 ### Added

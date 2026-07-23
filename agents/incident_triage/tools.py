@@ -13,7 +13,7 @@ from ...common.sys_schema_tools import (
     get_sys_io_global_by_file_by_latency,
     get_sys_statement_analysis,
 )
-from ...common.observability_tools import get_skysql_observability_snapshot
+from ...common.observability_tools import get_mariadb_cloud_observability_snapshot
 
 
 @function_tool
@@ -70,12 +70,12 @@ def read_error_log(
     replacing timestamps, PIDs, connection IDs, and specific database/table names.
     
     Supports two access methods:
-    1. SkySQL API: Provide service_id to fetch logs via API (or set SKYSQL_SERVICE_ID env var)
+    1. MariaDB Cloud API: Provide service_id or set MARIADB_CLOUD_SERVICE_ID
     2. Local file: Provide path to read from filesystem (for development/testing)
     
     Args:
-        service_id: Database service identifier (for SkySQL API access). 
-                   If not provided, will check SKYSQL_SERVICE_ID environment variable.
+        service_id: Database service identifier (for MariaDB Cloud API access).
+                   If not provided, checks MARIADB_CLOUD_SERVICE_ID.
         path: Absolute path to error log file (for local file access)
         max_bytes: Maximum bytes to read from end of log (default: 1_000_000)
         tail_lines: Approximate number of lines from end (default: 5000)
@@ -88,16 +88,16 @@ def read_error_log(
           Each pattern has: pattern, count, severity, first_seen, last_seen, sample_message
         - content: Raw log content (if extract_patterns=False)
         - total_lines: Total lines processed
-        - source: 'local_file' or 'skysql_api' or 'not_implemented'
+        - source: 'local_file' or 'mariadb_cloud_api'
     """
     import os
     
     # Priority: if path is explicitly provided, use it and ignore service_id
-    # Only use SkySQL API if path is not provided
+    # Only use the MariaDB Cloud API if path is not provided
     if path:
         # Explicit path provided - use local file, ignore service_id
         result = tail_error_log_file(
-            service_id=None,  # Explicitly set to None to avoid SkySQL API
+            service_id=None,  # Explicitly set to None to avoid the cloud API
             path=path,
             max_bytes=max_bytes,
             tail_lines=tail_lines,
@@ -105,10 +105,10 @@ def read_error_log(
             max_patterns=max_patterns,
         )
     else:
-        # No path provided - try SkySQL API if service_id available
+        # No path provided - try MariaDB Cloud API if service_id is available
         # If service_id not provided, try environment variable
         if not service_id:
-            service_id = os.getenv("SKYSQL_SERVICE_ID")
+            service_id = os.getenv("MARIADB_CLOUD_SERVICE_ID")
         
         result = tail_error_log_file(
             service_id=service_id,

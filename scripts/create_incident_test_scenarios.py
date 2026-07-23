@@ -59,9 +59,9 @@ class IncidentTestScenario:
                 'connection_timeout': 10,
             }
             
-            # SkySQL instances require SSL - don't disable it
+            # MariaDB Cloud instances use *.skysql.com and require SSL.
             if 'skysql.com' not in self.config.host.lower():
-                # For non-SkySQL hosts, SSL may not be required
+                # For non-cloud hosts, SSL may not be required.
                 connect_kwargs['ssl_disabled'] = True
             
             conn = mysql.connector.connect(**connect_kwargs)
@@ -625,7 +625,7 @@ def main():
             'database': config.database,
             'connection_timeout': 10,
         }
-        # SkySQL instances require SSL - don't disable it
+        # MariaDB Cloud instances use *.skysql.com and require SSL.
         if 'skysql.com' not in config.host.lower():
             connect_kwargs['ssl_disabled'] = True
         conn = mysql.connector.connect(**connect_kwargs)

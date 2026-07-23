@@ -1,8 +1,8 @@
-# Replication Health Agent - SkySQL/MaxScale Approach
+# Replication Health Agent - MariaDB Cloud/MaxScale Approach
 
 ## Problem Statement
 
-In SkySQL (MariaDB Cloud), MaxScale is used as a load balancer in front of the database servers. When we connect to the database, we're connecting through MaxScale, not directly to individual servers. This means:
+In MariaDB Cloud, MaxScale is used as a load balancer in front of the database servers. When we connect to the database, we're connecting through MaxScale, not directly to individual servers. This means:
 
 1. **We can't directly query individual replicas** - all queries go through MaxScale
 2. **We don't know which server we're connected to** - MaxScale load balances requests
@@ -74,7 +74,7 @@ def get_all_replica_status(
     max_executions: int = 10,
 ) -> dict[str, Any]:
     """
-    Get replication status from all replicas in a SkySQL service.
+    Get replication status from all replicas in a MariaDB Cloud service.
     
     Uses MaxScale round-robin load balancing by executing SHOW ALL SLAVES STATUS
     multiple times. Each execution may hit a different replica.
@@ -91,12 +91,12 @@ def get_all_replica_status(
     # Return combined results
 ```
 
-### Option 2: Use SkySQL API to Discover Replicas (Not Needed)
+### Option 2: Use MariaDB Cloud API to Discover Replicas (Not Needed)
 
 **Status**: Not implementing - workaround approach is sufficient
 
 **Reason**: 
-- SkySQL has maximum of 5 replicas
+- MariaDB Cloud has a maximum of 5 replicas
 - Executing 10 times ensures we hit all replicas
 - No need for API complexity for Phase 1
 
@@ -108,7 +108,7 @@ def get_all_replica_status(
 
 1. **Create tool**: `get_all_replica_status()`
    - Execute `SHOW ALL SLAVES STATUS` multiple times (default: 10)
-   - **SkySQL constraint**: Maximum 5 replicas, so 10 executions ensures coverage
+   - **MariaDB Cloud constraint**: Maximum 5 replicas, so 10 executions ensures coverage
    - Collect and deduplicate results
    - Return combined status from all replicas found
 
@@ -116,13 +116,13 @@ def get_all_replica_status(
    - Use `Connection_name` or `Server_id` to identify unique replicas
    - If both are available, prefer `Connection_name` (more reliable)
    - Store results in a dict keyed by identifier
-   - Maximum expected: 5 unique replicas (SkySQL limit)
+   - Maximum expected: 5 unique replicas (MariaDB Cloud limit)
 
 3. **Handle Edge Cases**:
    - If no results: Service might not have replication configured
    - If only one result: Might be hitting same replica, or only one replica exists
    - If 2-5 results: Normal, we're getting multiple replicas
-   - If more than 5 results: Unexpected (shouldn't happen in SkySQL), but handle gracefully
+   - If more than 5 results: Unexpected (shouldn't happen in MariaDB Cloud), but handle gracefully
 
 4. **For Master Status**:
    - Use `SHOW MASTER STATUS` (single execution, will hit primary)
@@ -138,7 +138,7 @@ def get_all_replica_status(
     max_executions: int = 10,
 ) -> dict[str, Any]:
     """
-    Get replication status from all replicas in a SkySQL service.
+    Get replication status from all replicas in a MariaDB Cloud service.
     
     This function works around MaxScale load balancing by executing
     SHOW ALL SLAVES STATUS multiple times. Each execution may be
@@ -190,9 +190,9 @@ def get_all_replica_status(
         "replicas": list(seen_replicas.values()),
         "count": len(seen_replicas),
         "executions": max_executions,
-        "max_expected": 5,  # SkySQL maximum
+        "max_expected": 5,  # MariaDB Cloud maximum
         "note": f"Executed SHOW ALL SLAVES STATUS {max_executions} times via MaxScale. "
-                f"Found {len(seen_replicas)} unique replicas (SkySQL max: 5). "
+                f"Found {len(seen_replicas)} unique replicas (MariaDB Cloud max: 5). "
                 f"Note: Results may vary due to MaxScale load balancing."
     }
 ```
@@ -205,7 +205,7 @@ def get_master_status() -> dict[str, Any]:
     """
     Get master/replication source status.
     
-    In SkySQL/MaxScale environment, this will hit the primary server.
+    In a MariaDB Cloud/MaxScale environment, this will hit the primary server.
     
     Returns:
         Dictionary with master status information
@@ -274,9 +274,9 @@ def get_replication_configuration() -> dict[str, Any]:
     }
 ```
 
-## Handling Non-SkySQL Environments
+## Handling Non-MariaDB Cloud Environments
 
-For non-SkySQL environments (direct connections):
+For non-MariaDB Cloud environments (direct connections):
 
 1. **Single Connection**: If connecting directly to a specific server
    - Use `SHOW REPLICA STATUS` / `SHOW SLAVE STATUS` directly
@@ -293,29 +293,29 @@ For non-SkySQL environments (direct connections):
 The agent should detect the environment:
 
 ```python
-def is_skysql_environment(host: str) -> bool:
-    """Check if we're in a SkySQL environment."""
+def is_mariadb_cloud_environment(host: str) -> bool:
+    """Check if we're in a MariaDB Cloud environment."""
     return 'skysql.com' in host.lower()
 
 def should_use_maxscale_workaround(host: str) -> bool:
     """Determine if we should use MaxScale workaround."""
-    return is_skysql_environment(host)
+    return is_mariadb_cloud_environment(host)
 ```
 
 ## Summary
 
 **For Phase 1 (Initial Implementation)**:
 - ✅ Use `SHOW ALL SLAVES STATUS` with multiple executions (workaround)
-- ✅ Execute 10 times by default (sufficient for SkySQL max of 5 replicas)
+- ✅ Execute 10 times by default (sufficient for the MariaDB Cloud maximum of 5 replicas)
 - ✅ Deduplicate results by `Connection_name` or `Server_id`
 - ✅ Use `SHOW MASTER STATUS` for primary status
 - ✅ Document limitations clearly
-- ✅ No SkySQL API integration needed (workaround is sufficient)
+- ✅ No MariaDB Cloud API integration needed (workaround is sufficient)
 
 **Key Points**:
 - MaxScale load balancing makes this challenging
 - The workaround is proven to work (from existing codebase)
-- **SkySQL constraint**: Maximum 5 replicas, so 10 executions ensures we hit all
-- For SkySQL, this workaround approach is sufficient
-- For non-SkySQL, we can connect directly to each server if connection info available
+- **MariaDB Cloud constraint**: Maximum 5 replicas, so 10 executions ensures we hit all
+- For MariaDB Cloud, this workaround approach is sufficient
+- For non-MariaDB Cloud environments, we can connect directly to each server if connection info is available
 

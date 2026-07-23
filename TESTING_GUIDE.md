@@ -208,7 +208,7 @@ If connection fails:
 1. Check `.env` file has correct credentials
 2. Verify database is accessible from your machine
 3. Check firewall/network settings
-4. For SkySQL: Ensure IP allowlist includes your IP
+4. For MariaDB Cloud: Ensure the IP allowlist includes your IP
 
 ## Expected Output
 

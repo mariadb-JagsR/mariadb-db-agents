@@ -129,13 +129,13 @@ For more information about a specific agent, use:
         "--error-log-path",
         type=str,
         default=None,
-        help="Path to error log file (for local file access). If not provided, will attempt SkySQL API if service_id is set.",
+        help="Path to an error log file. If omitted, uses the MariaDB Cloud API when service_id is set.",
     )
     incident_triage_parser.add_argument(
         "--service-id",
         type=str,
         default=None,
-        help="SkySQL service ID for API-based error log access (if not using local file).",
+        help="MariaDB Cloud service ID for API-based error log access.",
     )
     incident_triage_parser.add_argument(
         "--max-error-patterns",
@@ -197,7 +197,7 @@ For more information about a specific agent, use:
         type=int,
         default=10,
         help="Number of times to execute SHOW ALL SLAVES STATUS to discover replicas (default: 10). "
-             "SkySQL has a maximum of 5 replicas, so 10 executions ensures coverage.",
+             "MariaDB Cloud has a maximum of 5 replicas, so 10 executions ensures coverage.",
     )
     replication_parser.add_argument(
         "--max-turns",

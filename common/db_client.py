@@ -564,7 +564,7 @@ def extract_error_log_patterns(
     return result[:max_patterns]
 
 
-def _get_skysql_logs_info(
+def _get_mariadb_cloud_logs_info(
     api_key: str,
     service_id: str,
     log_type: str,
@@ -574,15 +574,15 @@ def _get_skysql_logs_info(
     max_total_size: int = 10 * 1024 * 1024,  # 10MB default
 ) -> list[str]:
     """
-    Get list of log IDs from SkySQL API for a given time range.
+    Get log IDs from the MariaDB Cloud API for a given time range.
     
     Args:
-        api_key: SkySQL API key
+        api_key: MariaDB Cloud API key
         service_id: Database service ID
         log_type: Type of log ('error-log' or 'slow-query-log')
         start_timestamp: Start time in ISO8601 format
         end_timestamp: End time in ISO8601 format
-        api_url: SkySQL API base URL
+        api_url: MariaDB Cloud API base URL
         max_total_size: Maximum total size of log files in bytes (default: 10MB)
     
     Returns:
@@ -607,12 +607,12 @@ def _get_skysql_logs_info(
     try:
         response = requests.get(api_url, headers=headers, params=params, timeout=30)
     except Exception as e:
-        logger.error(f"Error from SkySQL log info service: {str(e)}")
-        raise Exception(f"Error from SkySQL log info service: {str(e)}") from e
+        logger.error(f"Error from MariaDB Cloud log info service: {str(e)}")
+        raise Exception(f"Error from MariaDB Cloud log info service: {str(e)}") from e
     
     if response.status_code != 200:
         raise Exception(
-            f"Unexpected response code {response.status_code} from SkySQL log info service: "
+            f"Unexpected response code {response.status_code} from MariaDB Cloud log info service: "
             f"{response.text}"
         )
     
@@ -633,26 +633,26 @@ def _get_skysql_logs_info(
     if total_logfiles_size > max_total_size:
         raise Exception(
             f"Total size of {log_type} files ({total_logfiles_size} bytes) exceeds maximum "
-            f"({max_total_size} bytes). Please review logs in the SkySQL portal."
+            f"({max_total_size} bytes). Please review logs in the MariaDB Cloud portal."
         )
     
     return logids
 
 
-def _get_skysql_logs_archive(
+def _get_mariadb_cloud_logs_archive(
     api_key: str,
     log_type: str,
     logids: list[str],
     api_url: str,
 ) -> bytes:
     """
-    Download log files archive from SkySQL API.
+    Download a log archive from the MariaDB Cloud API.
     
     Args:
-        api_key: SkySQL API key
+        api_key: MariaDB Cloud API key
         log_type: Type of log ('error-log' or 'slow-query-log')
         logids: List of log IDs to download
-        api_url: SkySQL API base URL
+        api_url: MariaDB Cloud API base URL
     
     Returns:
         Bytes content of the zip archive
@@ -678,12 +678,12 @@ def _get_skysql_logs_archive(
     try:
         response = requests.get(archive_url, headers=headers, params=params, timeout=60)
     except Exception as e:
-        logger.error(f"Error from SkySQL log archive service: {str(e)}")
-        raise Exception(f"Error from SkySQL log archive service: {str(e)}") from e
+        logger.error(f"Error from MariaDB Cloud log archive service: {str(e)}")
+        raise Exception(f"Error from MariaDB Cloud log archive service: {str(e)}") from e
     
     if response.status_code != 200:
         raise Exception(
-            f"Unexpected response code {response.status_code} from SkySQL log archive service: "
+            f"Unexpected response code {response.status_code} from MariaDB Cloud log archive service: "
             f"{response.text}"
         )
     
@@ -729,14 +729,14 @@ def _read_large_zipfile_in_reverse(
             yield buffer
 
 
-def _load_skysql_errors(
+def _load_mariadb_cloud_errors(
     payload: bytes,
     start_timestamp: str,
     end_timestamp: str,
     max_lines: int = 5000,
 ) -> list[str]:
     """
-    Extract error log lines from SkySQL log archive zip file.
+    Extract error lines from a MariaDB Cloud log archive.
     
     Args:
         payload: Zip file content as bytes
@@ -850,10 +850,10 @@ def tail_error_log_file(
     
     Supports two modes:
     1. Local file access (for development/testing): reads from filesystem
-    2. SkySQL API (for production): calls vendor-specific API
+    2. MariaDB Cloud API (for production): calls the managed-service API
     
     Args:
-        service_id: Database service identifier (for SkySQL API)
+        service_id: Database service identifier (for MariaDB Cloud API)
         path: Absolute path to error log file (for local file access)
         max_bytes: Maximum number of bytes to read from the end (default: 1_000_000)
         tail_lines: Approximate number of lines from the end (default: 5000)
@@ -865,7 +865,7 @@ def tail_error_log_file(
         - content: Raw log content (if extract_patterns=False)
         - patterns: List of error patterns (if extract_patterns=True)
         - total_lines: Total number of lines processed
-        - source: 'local_file' or 'skysql_api'
+        - source: 'local_file' or 'mariadb_cloud_api'
     """
     import os
     import logging
@@ -874,16 +874,16 @@ def tail_error_log_file(
     logger = logging.getLogger(__name__)
     
     # Priority: if path is explicitly provided, use it and ignore service_id
-    # Only use SkySQL API if path is not provided
+    # Only use the MariaDB Cloud API if path is not provided
     if path:
         # Explicit path provided - use local file access
         pass  # Will handle below
     elif service_id:
-        # No path provided - try SkySQL API if service_id available
+        # No path provided - try MariaDB Cloud API if service_id available
         try:
-            from .config import SkySQLConfig
+            from .config import MariaDBCloudConfig
             
-            skysql_config = SkySQLConfig.from_env()
+            cloud_config = MariaDBCloudConfig.from_env()
             
             # Calculate time range (default: last 24 hours)
             end_time = datetime.now(UTC)
@@ -893,25 +893,25 @@ def tail_error_log_file(
             end_timestamp = end_time.isoformat(timespec="seconds").split("+")[0] + "Z"
             
             # Get log IDs
-            logids = _get_skysql_logs_info(
-                api_key=skysql_config.api_key,
+            logids = _get_mariadb_cloud_logs_info(
+                api_key=cloud_config.api_key,
                 service_id=service_id,
                 log_type="error-log",
                 start_timestamp=start_timestamp,
                 end_timestamp=end_timestamp,
-                api_url=skysql_config.api_url,
+                api_url=cloud_config.api_url,
             )
             
             # Download log archive
-            payload = _get_skysql_logs_archive(
-                api_key=skysql_config.api_key,
+            payload = _get_mariadb_cloud_logs_archive(
+                api_key=cloud_config.api_key,
                 log_type="error-log",
                 logids=logids,
-                api_url=skysql_config.api_url,
+                api_url=cloud_config.api_url,
             )
             
             # Extract error log lines
-            log_lines = _load_skysql_errors(
+            log_lines = _load_mariadb_cloud_errors(
                 payload=payload,
                 start_timestamp=start_timestamp,
                 end_timestamp=end_timestamp,
@@ -926,23 +926,23 @@ def tail_error_log_file(
                 return {
                     "patterns": patterns,
                     "total_lines": total_lines,
-                    "source": "skysql_api",
+                    "source": "mariadb_cloud_api",
                 }
             else:
                 return {
                     "content": content,
                     "total_lines": total_lines,
-                    "source": "skysql_api",
+                    "source": "mariadb_cloud_api",
                 }
                 
         except ImportError:
             raise RuntimeError(
-                "SkySQL API access requires SKYSQL_API_KEY environment variable. "
+                "MariaDB Cloud API access requires MARIADB_CLOUD_API_KEY. "
                 "Set this in your .env file or environment. "
                 "You can generate an API key at https://id.mariadb.com/account/api/"
             )
         except Exception as e:
-            logger.error(f"Error fetching error logs from SkySQL API: {str(e)}")
+            logger.error(f"Error fetching error logs from MariaDB Cloud API: {str(e)}")
             raise
     
     # Try local file access if path provided
@@ -989,6 +989,6 @@ def tail_error_log_file(
     
     # Neither service_id nor path provided
     raise ValueError(
-        "Either service_id (for SkySQL API) or path (for local file) must be provided"
+        "Either service_id (for MariaDB Cloud API) or path (for local file) must be provided"
     )
 

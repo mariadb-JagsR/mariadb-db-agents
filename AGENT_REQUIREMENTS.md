@@ -8,9 +8,9 @@ This document consolidates all requirements identified for the MariaDB Database 
 
 1. **Slow Query Agent** - Analyzes historical slow queries from slow query logs (supports mysql.slow_log table and local log files)
 2. **Running Query Agent** - Analyzes currently executing SQL queries in real-time
-3. **Incident Triage Agent** - Meta-agent that quickly identifies database issues, correlates symptoms, and provides actionable checklists (supports local error log files and SkySQL API)
+3. **Incident Triage Agent** - Meta-agent that quickly identifies database issues, correlates symptoms, and provides actionable checklists (supports local error log files and the MariaDB Cloud API)
 4. **DBA Orchestrator** - Meta-agent that intelligently routes queries to specialized agents and synthesizes comprehensive reports
-5. **Replication Health Agent** - Monitors replication lag, detects failures, and recommends optimizations (works with SkySQL/MaxScale)
+5. **Replication Health Agent** - Monitors replication lag, detects failures, and recommends optimizations (works with MariaDB Cloud/MaxScale)
 6. **Database Inspector Agent** - Executes read-only SQL queries for follow-up analysis and interactive investigation
 
 ---
@@ -209,7 +209,7 @@ This document consolidates all requirements identified for the MariaDB Database 
 - Identify opportunities for query optimization to reduce costs
 - Recommend storage optimization (compression, archiving)
 - Analyze peak vs. off-peak usage for scheduling optimizations
-- Correlate scaling events to query bursts (SkySQL serverless)
+- Correlate scaling events to query bursts (MariaDB Cloud serverless)
 - Identify top 3 cost drivers
 
 **Tools Needed:**
@@ -235,7 +235,7 @@ This document consolidates all requirements identified for the MariaDB Database 
 **Key Addition from ChatGPT:**
 - Serverless-specific: correlate scaling events to query bursts
 - Cost drivers identification (top 3 cost drivers)
-- This is valuable for SkySQL context!
+- This is valuable for MariaDB Cloud context!
 
 ---
 
@@ -263,7 +263,7 @@ This document consolidates all requirements identified for the MariaDB Database 
 - `SHOW MASTER STATUS`
 - `information_schema.tables` (for data volume analysis)
 - Backup system APIs (if integrated)
-- SkySQL API integration (for backup verification)
+- MariaDB Cloud API integration (for backup verification)
 
 **Use Cases:**
 - "Are my backups working correctly?"
@@ -509,9 +509,9 @@ Orchestrator:
 
 1. **Common DB Client** (`common/db_client.py`)
    - Read-only SQL execution with safety checks
-   - SSL connection support for SkySQL
+   - SSL connection support for MariaDB Cloud
    - Error log reading and pattern extraction
-   - SkySQL API integration for error logs
+   - MariaDB Cloud API integration for error logs
 
 2. **Guardrails** (`common/guardrails.py`)
    - Input/output validation
@@ -534,7 +534,7 @@ Orchestrator:
 5. **Configuration** (`common/config.py`)
    - OpenAI API configuration
    - Database connection configuration
-   - SkySQL API configuration (API key, service ID, API URL)
+   - MariaDB Cloud API configuration (API key, service ID, API URL)
 
 ### New Tools Needed (For Future Agents)
 
@@ -611,18 +611,21 @@ Several agents can **leverage existing agents**:
 - **Capacity Planning** → can analyze Slow Query Agent output for trends
 - **DBA Orchestrator** → routes to all specialized agents
 
-### SkySQL-Specific Opportunities
-Several agents have SkySQL-specific value:
+### MariaDB Cloud-Specific Opportunities
+Several agents have MariaDB Cloud-specific value:
 - **Capacity & Cost Agent**: Serverless scaling events correlation
-- **Backup Agent**: SkySQL backup API integration
-- **Configuration Agent**: SkySQL instance sizing recommendations
-- **Error Log Analysis**: SkySQL API integration (already implemented in Incident Triage Agent)
+- **Backup Agent**: MariaDB Cloud backup API integration
+- **Configuration Agent**: MariaDB Cloud instance sizing recommendations
+- **Error Log Analysis**: MariaDB Cloud API integration (already implemented in Incident Triage Agent)
+- **Current + Historical Metrics**: Prometheus snapshot, instant query, and range query
+  integration (already implemented in the Orchestrator and Incident Triage Agent)
 
 ### Integration Points
-- **SkySQL API**: For service metadata, connection info, logs, backups
-- **Monitoring Stack**: For historical metrics and alerting (future)
+- **MariaDB Cloud API**: Service metadata, current metrics, retained metric history, logs,
+  and future backup integrations
+- **Monitoring Stack**: Historical alerting and external dashboard integrations (future)
 - **Backup Systems**: For backup verification (if accessible)
-- **Log Aggregation**: For comprehensive log analysis (SkySQL API already integrated)
+- **Log Aggregation**: For comprehensive log analysis (MariaDB Cloud API already integrated)
 
 ---
 

@@ -39,4 +39,4 @@ fi
 echo "Updated .env DB_* keys (password not printed)."
 echo "  Host: ${DB_HOST}"
 echo "  User: ${DB_USER}"
-echo "  SSL: enabled for SkySQL hosts (see db_client)"
+echo "  SSL: enabled for MariaDB Cloud hosts (*.skysql.com; see db_client)"
