@@ -59,8 +59,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 async def run_agent_async(
+    request: str | None = None,
     error_log_path: str | None = None,
     service_id: str | None = None,
+    log_start_time: str | None = None,
+    log_end_time: str | None = None,
+    log_lookback_days: int = 7,
     max_error_patterns: int = 20,
     error_log_lines: int = 5000,
     max_turns: int = 30,
@@ -69,8 +73,12 @@ async def run_agent_async(
     Run the incident triage agent asynchronously.
 
     Args:
+        request: Original user request, including any requested time range
         error_log_path: Path to error log file (for local access)
         service_id: MariaDB Cloud service ID (for API access)
+        log_start_time: Cloud log range start in ISO 8601 format
+        log_end_time: Cloud log range end in ISO 8601 format
+        log_lookback_days: Cloud lookback when no start time is supplied
         max_error_patterns: Maximum error patterns to extract
         error_log_lines: Lines to read from error log
         max_turns: Maximum number of agent turns/tool calls
@@ -86,7 +94,7 @@ async def run_agent_async(
     agent = create_incident_triage_agent()
 
     # Create the user prompt
-    user_prompt = (
+    user_prompt = request or (
         "Something's wrong with the database. Please perform incident triage: "
         "gather a health snapshot, identify the top 2-3 likely causes, and provide "
         "a prioritized checklist of immediate checks and safe mitigations."
@@ -97,6 +105,12 @@ async def run_agent_async(
         user_prompt += f"\n\nError log is available at: {error_log_path}"
     elif service_id:
         user_prompt += f"\n\nError log should be fetched via MariaDB Cloud API for service_id: {service_id}"
+        if log_start_time:
+            user_prompt += f"\nUse log start_time: {log_start_time}"
+        if log_end_time:
+            user_prompt += f"\nUse log end_time: {log_end_time}"
+        if not log_start_time:
+            user_prompt += f"\nUse the default log lookback of {log_lookback_days} days."
 
     # Run the agent
     result = await Runner.run(agent, user_prompt, max_turns=max_turns)

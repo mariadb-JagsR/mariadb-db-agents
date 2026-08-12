@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { api } from "./api";
@@ -42,6 +43,47 @@ const CONFIG_FIELDS = [
   { key: "MARIADB_CLOUD_SERVICE_ID", label: "MariaDB Cloud Service ID", optional: true },
   { key: "MARIADB_CLOUD_LOG_API_URL", label: "MariaDB Cloud Log API URL", optional: true }
 ];
+
+function SessionTitleButton({ title, onClick }) {
+  const buttonRef = useRef(null);
+  const [previewPosition, setPreviewPosition] = useState(null);
+
+  function showPreview() {
+    const button = buttonRef.current;
+    if (!button || button.scrollWidth <= button.clientWidth) return;
+
+    const rect = button.getBoundingClientRect();
+    setPreviewPosition({
+      left: rect.right + 10,
+      top: Math.min(rect.top, window.innerHeight - 120),
+    });
+  }
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        className="session-row-main"
+        onClick={onClick}
+        onMouseEnter={showPreview}
+        onMouseLeave={() => setPreviewPosition(null)}
+        onFocus={showPreview}
+        onBlur={() => setPreviewPosition(null)}
+        aria-label={title}
+      >
+        {title}
+      </button>
+      {previewPosition &&
+        createPortal(
+          <div className="session-title-preview" role="tooltip" style={previewPosition}>
+            <span className="session-title-preview-label">Chat title</span>
+            {title}
+          </div>,
+          document.body,
+        )}
+    </>
+  );
+}
 
 const DEFAULT_PROFILE_FORM = {
   name: "",
@@ -265,6 +307,7 @@ export function App() {
     let assistantContent = "";
     let finalSessionId = sessionId;
     let streamError = null;
+    let succeeded = false;
 
     // Coalesce token writes. Patching React state on every token repaints the
     // whole bubble per character — that's the flicker. Buffer the deltas and
@@ -370,19 +413,29 @@ export function App() {
       if (finalSessionId) {
         await refreshAll(finalSessionId);
       }
+      succeeded = true;
     } catch (err) {
       cancelFlush();
       setError(err.message);
-      patchAssistant({ streaming: false });
+      // Roll back the optimistic turn. The composer keeps the rejected draft so
+      // the user can edit and retry instead of losing their input.
+      setMessages((prev) =>
+        prev.filter(
+          (item) =>
+            item.created_at !== userMessage.created_at &&
+            item.created_at !== assistantCreatedAt
+        )
+      );
     } finally {
       cancelFlush();
       setIsRunning(false);
       setRunProgress([]);
     }
+    return succeeded;
   }
 
   async function handleSend(messageText) {
-    await sendMessage(messageText);
+    return sendMessage(messageText);
   }
 
   async function handleStarterQuestion(question) {
@@ -582,13 +635,10 @@ export function App() {
                   key={session.id}
                   className={sessionId === session.id ? "session-row active" : "session-row"}
                 >
-                  <button
-                    className="session-row-main"
+                  <SessionTitleButton
+                    title={session.title || "Chat"}
                     onClick={() => selectSession(session.id)}
-                    title={session.title || session.id}
-                  >
-                    {(session.title || "Chat").slice(0, 28)}
-                  </button>
+                  />
                   <button
                     className="session-row-del"
                     onClick={() => deleteSessionById(session.id)}
@@ -917,8 +967,10 @@ function ChatComposer({ onSend, disabled }) {
     if (!message || disabled) {
       return;
     }
-    await onSend(message);
-    setDraft("");
+    const sent = await onSend(message);
+    if (sent) {
+      setDraft("");
+    }
   }
 
   return (

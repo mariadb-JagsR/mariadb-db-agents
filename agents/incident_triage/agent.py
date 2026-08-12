@@ -117,7 +117,11 @@ High-level behavior:
       - This helps identify disk I/O pressure during incidents
    
    f) **Error Log Analysis:**
-      - Use read_error_log() to get recent error patterns
+      - Use read_error_log() to get error patterns from the requested time range
+      - For MariaDB Cloud, pass start_time and end_time as ISO 8601 timestamps when
+        the user specifies a range; otherwise use the default 7-day lookback
+      - Never claim that exact time-range retrieval is unavailable: the MariaDB
+        Cloud Logs API supports fromDate/toDate filtering through this tool
       - Focus on ERROR and WARNING severity patterns
       - Look for patterns that occurred recently (check first_seen/last_seen)
       - Analyze sample messages to understand root cause

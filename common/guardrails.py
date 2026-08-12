@@ -22,7 +22,7 @@ async def validate_input_guardrail(
 
     Checks:
     - Input is not empty
-    - Input doesn't contain dangerous SQL keywords that might be injected
+    - Only the current user question is evaluated when conversation context is present
     
     IMPORTANT: Only checks the most recent user message, not conversation history.
     This prevents false positives from agent responses that mention SQL commands.
@@ -60,6 +60,12 @@ async def validate_input_guardrail(
                 input_text = str(last_msg)
     else:
         input_text = messages
+        # The UI supplies bounded conversation history as a single prompt string.
+        # Validate only the explicitly marked current question; otherwise a SQL
+        # phrase in an earlier assistant response can poison every later turn.
+        current_question_marker = "USER (current question):"
+        if current_question_marker in input_text:
+            input_text = input_text.rsplit(current_question_marker, 1)[1]
 
     # Check for empty input
     if not input_text or not input_text.strip():
@@ -68,29 +74,10 @@ async def validate_input_guardrail(
             output_info={"reason": "Empty input detected"},
         )
 
-    # Check for dangerous SQL injection patterns (basic check)
-    # Make patterns more specific to avoid false positives
-    # Only trigger on direct SQL commands, not on phrases like "create a table" in natural language
-    dangerous_patterns = [
-        r"\bdrop\s+table\s+\w+",  # "drop table x" but not "drop the table"
-        r"\bdelete\s+from\s+\w+",  # "delete from x" but not "delete from the log"
-        r"\btruncate\s+table\s+\w+",  # "truncate table x"
-        r"\balter\s+table\s+\w+",  # "alter table x"
-        r"\bcreate\s+table\s+\w+",  # "create table x" but not "create a table"
-        r"\bgrant\s+\w+\s+on",  # "grant x on"
-        r"\brevoke\s+\w+\s+on",  # "revoke x on"
-    ]
-    import re
-    input_lower = input_text.lower()
-    for pattern in dangerous_patterns:
-        if re.search(pattern, input_lower):
-            return GuardrailFunctionOutput(
-                tripwire_triggered=True,
-                output_info={
-                    "reason": f"Dangerous SQL pattern detected: {pattern}",
-                    "pattern": pattern,
-                },
-            )
+    # Do not reject SQL text merely because it discusses DDL/DML. DBA users need
+    # to inspect and reason about statements such as DROP TABLE or DELETE FROM.
+    # Actual execution remains protected at the database boundary by the
+    # conservative read-only SQL validator in common.db_client.
 
     return GuardrailFunctionOutput(
         tripwire_triggered=False,

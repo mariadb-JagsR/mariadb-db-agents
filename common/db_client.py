@@ -844,6 +844,9 @@ def tail_error_log_file(
     tail_lines: int = 5000,
     extract_patterns: bool = True,
     max_patterns: int = 20,
+    start_time: str | None = None,
+    end_time: str | None = None,
+    lookback_days: int = 7,
 ) -> Dict[str, Any]:
     """
     Read the tail of the MariaDB error log file and optionally extract patterns.
@@ -859,6 +862,9 @@ def tail_error_log_file(
         tail_lines: Approximate number of lines from the end (default: 5000)
         extract_patterns: If True, extract and group error patterns (default: True)
         max_patterns: Maximum number of unique patterns to return (default: 20)
+        start_time: MariaDB Cloud range start in ISO 8601 format
+        end_time: MariaDB Cloud range end in ISO 8601 format
+        lookback_days: Default Cloud lookback when start_time is omitted (default: 7)
     
     Returns:
         Dictionary with:
@@ -885,12 +891,37 @@ def tail_error_log_file(
             
             cloud_config = MariaDBCloudConfig.from_env()
             
-            # Calculate time range (default: last 24 hours)
-            end_time = datetime.now(UTC)
-            start_time = end_time - timedelta(hours=24)
-            
-            start_timestamp = start_time.isoformat(timespec="seconds").split("+")[0] + "Z"
-            end_timestamp = end_time.isoformat(timespec="seconds").split("+")[0] + "Z"
+            from dateutil import parser
+
+            if lookback_days < 1:
+                raise ValueError("lookback_days must be at least 1")
+
+            def parse_timestamp(value: str, field_name: str) -> datetime:
+                try:
+                    parsed = parser.isoparse(value)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(
+                        f"{field_name} must be a valid ISO 8601 timestamp"
+                    ) from exc
+                if parsed.tzinfo is None:
+                    parsed = parsed.replace(tzinfo=UTC)
+                return parsed.astimezone(UTC)
+
+            end_datetime = (
+                parse_timestamp(end_time, "end_time")
+                if end_time
+                else datetime.now(UTC)
+            )
+            start_datetime = (
+                parse_timestamp(start_time, "start_time")
+                if start_time
+                else end_datetime - timedelta(days=lookback_days)
+            )
+            if start_datetime > end_datetime:
+                raise ValueError("start_time must be before or equal to end_time")
+
+            start_timestamp = start_datetime.isoformat(timespec="seconds").replace("+00:00", "Z")
+            end_timestamp = end_datetime.isoformat(timespec="seconds").replace("+00:00", "Z")
             
             # Get log IDs
             logids = _get_mariadb_cloud_logs_info(
@@ -927,12 +958,18 @@ def tail_error_log_file(
                     "patterns": patterns,
                     "total_lines": total_lines,
                     "source": "mariadb_cloud_api",
+                    "service_id": service_id,
+                    "start_time": start_timestamp,
+                    "end_time": end_timestamp,
                 }
             else:
                 return {
                     "content": content,
                     "total_lines": total_lines,
                     "source": "mariadb_cloud_api",
+                    "service_id": service_id,
+                    "start_time": start_timestamp,
+                    "end_time": end_timestamp,
                 }
                 
         except ImportError:

@@ -343,7 +343,7 @@ body {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr) 360px;
+  grid-template-columns: 280px minmax(0, 1fr) 360px;
 }
 
 /* --- Left sidebar --- */
@@ -377,6 +377,7 @@ body {
   margin-bottom: 2px;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
+  transition: background-color 140ms ease, border-color 140ms ease;
 }
 
 button.session-row {
@@ -434,15 +435,57 @@ button.session-row:hover {
   opacity: 0;
   border-radius: 4px;
   font-family: var(--font-body);
+  transition: opacity 140ms ease, background-color 140ms ease, color 140ms ease;
 }
 
-.session-row:hover .session-row-del {
+.session-row:hover .session-row-del,
+.session-row:focus-within .session-row-del {
   opacity: 1;
 }
 
 .session-row-del:hover {
   background: var(--red-bg);
   color: var(--red);
+}
+
+.session-title-preview {
+  position: fixed;
+  z-index: 1200;
+  width: max-content;
+  max-width: min(380px, calc(100vw - 32px));
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--card-bg);
+  box-shadow: var(--shadow-lg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 0.84rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  animation: session-title-in 120ms ease-out;
+}
+
+.session-title-preview-label {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--text-faint);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+@keyframes session-title-in {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .starter-col {

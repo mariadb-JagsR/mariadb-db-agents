@@ -135,6 +135,10 @@ async def list_tools() -> list[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
+                    "request": {
+                        "type": "string",
+                        "description": "Investigation request, including the desired log time range",
+                    },
                     "error_log_path": {
                         "type": "string",
                         "description": "Path to error log file (for local file access)",
@@ -142,6 +146,20 @@ async def list_tools() -> list[Tool]:
                     "service_id": {
                         "type": "string",
                         "description": "MariaDB Cloud service ID for API-based error log access",
+                    },
+                    "log_start_time": {
+                        "type": "string",
+                        "description": "MariaDB Cloud log range start in ISO 8601 format",
+                    },
+                    "log_end_time": {
+                        "type": "string",
+                        "description": "MariaDB Cloud log range end in ISO 8601 format",
+                    },
+                    "log_lookback_days": {
+                        "type": "integer",
+                        "description": "Cloud log lookback when no start time is supplied (default: 7 days)",
+                        "default": 7,
+                        "minimum": 1,
                     },
                     "max_error_patterns": {
                         "type": "integer",
@@ -244,8 +262,12 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             )
         elif name == "perform_incident_triage":
             result = await perform_incident_triage(
+                request=arguments.get("request"),
                 error_log_path=arguments.get("error_log_path"),
                 service_id=arguments.get("service_id"),
+                log_start_time=arguments.get("log_start_time"),
+                log_end_time=arguments.get("log_end_time"),
+                log_lookback_days=arguments.get("log_lookback_days", 7),
                 max_error_patterns=arguments.get("max_error_patterns", 20),
                 error_log_lines=arguments.get("error_log_lines", 5000),
                 max_turns=arguments.get("max_turns", 30),

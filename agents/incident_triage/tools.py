@@ -61,6 +61,9 @@ def read_error_log(
     tail_lines: int = 5000,
     extract_patterns: bool = True,
     max_patterns: int = 20,
+    start_time: str | None = None,
+    end_time: str | None = None,
+    lookback_days: int = 7,
 ) -> dict[str, Any]:
     """
     Read MariaDB error log and extract error patterns.
@@ -81,6 +84,9 @@ def read_error_log(
         tail_lines: Approximate number of lines from end (default: 5000)
         extract_patterns: If True, extract and group error patterns (default: True)
         max_patterns: Maximum unique patterns to return (default: 20)
+        start_time: Cloud log range start as an ISO 8601 timestamp. Cloud API only.
+        end_time: Cloud log range end as an ISO 8601 timestamp. Cloud API only.
+        lookback_days: Cloud lookback when start_time is omitted (default: 7 days).
     
     Returns:
         Dictionary with:
@@ -103,6 +109,9 @@ def read_error_log(
             tail_lines=tail_lines,
             extract_patterns=extract_patterns,
             max_patterns=max_patterns,
+            start_time=start_time,
+            end_time=end_time,
+            lookback_days=lookback_days,
         )
     else:
         # No path provided - try MariaDB Cloud API if service_id is available
@@ -117,6 +126,9 @@ def read_error_log(
             tail_lines=tail_lines,
             extract_patterns=extract_patterns,
             max_patterns=max_patterns,
+            start_time=start_time,
+            end_time=end_time,
+            lookback_days=lookback_days,
         )
     return result
 

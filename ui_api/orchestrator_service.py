@@ -29,6 +29,12 @@ def _format_run_error(exc: Exception) -> str:
     raw = str(exc).strip() or exc.__class__.__name__
     normalized = raw.lower()
 
+    if "guardrail" in normalized and "tripwire" in normalized:
+        return (
+            "This request was blocked by input safety validation. "
+            "Your message has been preserved so you can edit and retry."
+        )
+
     db_markers = (
         "mysql",
         "can't connect to mysql",

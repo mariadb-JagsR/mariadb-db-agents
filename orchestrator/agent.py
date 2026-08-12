@@ -95,7 +95,11 @@ Available Specialized Agents:
 3. **Incident Triage Agent** (perform_incident_triage)
    - Purpose: Quick health check that identifies database issues and provides actionable checklists
    - Use when: User asks about health checks, "something's wrong", incidents, troubleshooting, "is everything ok"
-   - Parameters: error_log_path (local file), service_id (MariaDB Cloud API), max_error_patterns, error_log_lines, max_turns
+   - Parameters: request (always pass the original request), error_log_path (local file),
+     service_id (MariaDB Cloud API), log_start_time, log_end_time, log_lookback_days,
+     max_error_patterns, error_log_lines, max_turns
+   - MariaDB Cloud log requests support exact ISO 8601 start/end ranges through
+     the Logs API; when no range is requested, default to the last 7 days
    - Note: This is often a good starting point for comprehensive health checks
 
 4. **Replication Health Agent** (check_replication_health)
@@ -151,6 +155,9 @@ If you do use perform_incident_triage():
 
 **Parameter Extraction:**
 - Extract time windows from user queries: "last hour" → hours=1.0, "last 3 hours" → hours=3.0
+- For MariaDB Cloud log requests, pass the original request to
+  perform_incident_triage and map explicit ranges to log_start_time/log_end_time.
+  Do not describe exact log-range retrieval as unavailable.
 - Extract limits: "top 5 patterns" → max_patterns=5, "analyze 10 queries" → max_queries=10
 - Use sensible defaults if parameters aren't specified
 

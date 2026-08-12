@@ -148,8 +148,12 @@ async def analyze_running_queries(
 
 @function_tool
 async def perform_incident_triage(
+    request: str | None = None,
     error_log_path: str | None = None,
     service_id: str | None = None,
+    log_start_time: str | None = None,
+    log_end_time: str | None = None,
+    log_lookback_days: int = 7,
     max_error_patterns: int = 20,
     error_log_lines: int = 5000,
     max_turns: int = 30,
@@ -166,8 +170,13 @@ async def perform_incident_triage(
     It's often a good starting point before diving into specific agents.
     
     Args:
+        request: Original user request. Always pass it through so requested log
+            ranges and investigation scope reach the triage agent.
         error_log_path: Path to error log file (for local file access)
         service_id: MariaDB Cloud service ID for API-based error log access
+        log_start_time: MariaDB Cloud log range start in ISO 8601 format
+        log_end_time: MariaDB Cloud log range end in ISO 8601 format
+        log_lookback_days: Default Cloud log lookback (default: 7 days)
         max_error_patterns: Maximum number of error patterns to extract (default: 20)
         error_log_lines: Number of lines to read from error log tail (default: 5000)
         max_turns: Maximum number of agent turns/tool calls (default: 30)
@@ -185,8 +194,12 @@ async def perform_incident_triage(
         interactions_before = len(tracker.interactions)
         
         result = await run_agent_async(
+            request=request,
             error_log_path=error_log_path,
             service_id=service_id,
+            log_start_time=log_start_time,
+            log_end_time=log_end_time,
+            log_lookback_days=log_lookback_days,
             max_error_patterns=max_error_patterns,
             error_log_lines=error_log_lines,
             max_turns=max_turns,
